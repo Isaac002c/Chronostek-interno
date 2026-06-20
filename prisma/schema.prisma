@@ -1,0 +1,1082 @@
+// Chronostek — Sistema Interno (CRM/ERP modular)
+// Schema Prisma. Money fields use Float for clean Server->Client serialization
+// (documented MVP trade-off vs Decimal).
+//
+// Fase "Gestão por Centro de Custo": CostCenter expandido, Budget/BudgetLine,
+// ApprovalRequest, jurídico completo (LegalDocument/Demand/Risk) e costCenterId
+// em todas as entidades operacionais. Mudanças aditivas (nada removido).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────── ENUMS ───────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  SOCIO_ADMIN
+  FINANCEIRO
+  COMERCIAL
+  MARKETING
+  TI
+  JURIDICO
+  BDR
+  VIEWER
+}
+
+enum UserStatus {
+  ATIVO
+  INATIVO
+}
+
+enum ModuleKey {
+  DASHBOARD
+  LEADS
+  COMERCIAL
+  FINANCEIRO
+  MARKETING
+  TI
+  JURIDICO
+  METAS
+  TAREFAS
+  GERAL
+}
+
+enum CostCenterType {
+  FINANCEIRO
+  COMERCIAL
+  MARKETING
+  TI
+  JURIDICO
+  ADMINISTRATIVO
+  OUTRO
+}
+
+enum LeadOrigin {
+  INSTAGRAM
+  GOOGLE
+  INDICACAO
+  COLD_CALL
+  WHATSAPP
+  EVENTO
+  SITE
+  OUTRO
+}
+
+enum LeadStatus {
+  NOVO
+  CONTATADO
+  QUALIFICADO
+  REUNIAO_MARCADA
+  PROPOSTA_ENVIADA
+  NEGOCIACAO
+  GANHO
+  PERDIDO
+}
+
+enum LeadInteractionType {
+  NOTA
+  LIGACAO
+  EMAIL
+  WHATSAPP
+  REUNIAO
+  OUTRO
+}
+
+enum ClientStatus {
+  PROSPECT
+  ATIVO
+  INATIVO
+  EM_RISCO
+  CHURN
+}
+
+enum ProposalStatus {
+  RASCUNHO
+  ENVIADA
+  ACEITA
+  RECUSADA
+  EXPIRADA
+}
+
+enum ContractType {
+  RECORRENTE
+  PROJETO_FECHADO
+  CONSULTORIA
+  SUPORTE
+  MARKETING
+  HIBRIDO
+}
+
+enum ContractStatus {
+  ATIVO
+  INADIMPLENTE
+  EM_RISCO
+  CANCELADO
+  RENOVACAO_PROXIMA
+  ENCERRADO
+}
+
+enum FinancialType {
+  RECEITA
+  DESPESA
+}
+
+enum FinancialStatus {
+  PENDENTE
+  PAGO
+  ATRASADO
+  CANCELADO
+}
+
+enum PaymentMethod {
+  PIX
+  BOLETO
+  CARTAO_CREDITO
+  CARTAO_DEBITO
+  TRANSFERENCIA
+  DINHEIRO
+  OUTRO
+}
+
+enum CategoryType {
+  RECEITA
+  DESPESA
+}
+
+enum ProjectType {
+  SISTEMA
+  SITE
+  LANDING_PAGE
+  AUTOMACAO
+  APP
+  SUPORTE
+  INFRAESTRUTURA
+  INTERNO
+}
+
+enum ProjectStatus {
+  PLANEJADO
+  EM_ANDAMENTO
+  PAUSADO
+  EM_REVISAO
+  ENTREGUE
+  CANCELADO
+}
+
+enum TimesheetType {
+  DESENVOLVIMENTO
+  REUNIAO
+  SUPORTE
+  RETRABALHO
+  PLANEJAMENTO
+  CORRECAO
+  DEPLOY
+  OUTRO
+}
+
+enum CampaignChannel {
+  INSTAGRAM
+  GOOGLE_ADS
+  META_ADS
+  INDICACAO
+  ORGANICO
+  WHATSAPP
+  EVENTO
+  EMAIL
+  OUTRO
+}
+
+enum CampaignStatus {
+  PLANEJADA
+  ATIVA
+  PAUSADA
+  ENCERRADA
+}
+
+// ───────── Orçamento ─────────
+
+enum BudgetPeriodType {
+  MENSAL
+  TRIMESTRAL
+  ANUAL
+}
+
+enum BudgetStatus {
+  RASCUNHO
+  APROVADO
+  ATIVO
+  ENCERRADO
+}
+
+// ───────── Aprovações ─────────
+
+enum ApprovalType {
+  ORCAMENTO
+  DESPESA
+  EDICAO_MES_FECHADO
+  CONTRATO
+  RISCO_JURIDICO
+}
+
+enum ApprovalStatus {
+  PENDENTE
+  APROVADO
+  REJEITADO
+}
+
+// ───────── Jurídico ─────────
+
+enum LegalContractType {
+  CLIENTE
+  FORNECEDOR
+  PARCERIA
+  PRESTACAO_SERVICO
+  RESCISAO
+  NDA
+  FUNCIONARIO
+  FREELANCER
+  COMISSAO
+  POLITICA_PRIVACIDADE
+  TERMOS_USO
+  OUTRO
+}
+
+enum LegalContractStatus {
+  RASCUNHO
+  EM_REVISAO
+  ENVIADO
+  ASSINADO
+  ATIVO
+  VENCIDO
+  CANCELADO
+  RESCINDIDO
+}
+
+enum LegalDeadlineStatus {
+  PENDENTE
+  EM_ANDAMENTO
+  CONCLUIDO
+  ATRASADO
+  CANCELADO
+}
+
+enum LegalDocumentType {
+  CONTRATO
+  NDA
+  PROPOSTA
+  TERMO_RESCISAO
+  NOTIFICACAO
+  PROCURACAO
+  DOC_EMPRESA
+  DOC_CLIENTE
+  OUTRO
+}
+
+enum LegalDocumentStatus {
+  RASCUNHO
+  VALIDO
+  VENCIDO
+  ARQUIVADO
+}
+
+enum LegalDemandType {
+  REVISAO_CONTRATO
+  QUESTAO_CLIENTE
+  QUESTAO_FORNECEDOR
+  COBRANCA
+  POLITICA_INTERNA
+  PRIVACIDADE
+  SOCIETARIO
+  OUTRO
+}
+
+enum LegalDemandStatus {
+  ABERTA
+  EM_ANALISE
+  AGUARDANDO
+  RESOLVIDA
+  CANCELADA
+}
+
+enum LegalRiskType {
+  CONTRATUAL
+  FINANCEIRO
+  COMPLIANCE
+  PRIVACIDADE
+  TRABALHISTA
+  TRIBUTARIO
+  CLIENTE
+  FORNECEDOR
+  OUTRO
+}
+
+enum LegalRiskStatus {
+  ABERTO
+  MITIGANDO
+  ACEITO
+  RESOLVIDO
+}
+
+enum RiskScale {
+  BAIXO
+  MEDIO
+  ALTO
+}
+
+enum RiskLevel {
+  BAIXO
+  MEDIO
+  ALTO
+  CRITICO
+}
+
+// ───────── Metas ─────────
+
+enum GoalType {
+  RECEITA
+  DESPESA
+  LUCRO
+  LEADS
+  VENDAS
+  PROJETOS
+  CONTRATOS
+  MRR
+  ARR
+  PROJETOS_ENTREGUES
+  TAREFAS_CONCLUIDAS
+  HORAS
+  ROI_CAMPANHA
+  PRAZOS_JURIDICOS
+  MARKETING
+  FINANCEIRO
+  OPERACIONAL
+  JURIDICO
+  MANUAL
+  OUTRO
+}
+
+enum GoalPeriod {
+  MENSAL
+  TRIMESTRAL
+  ANUAL
+}
+
+enum GoalUnit {
+  REAIS
+  NUMERO
+  PERCENTUAL
+  HORAS
+}
+
+enum GoalStatus {
+  NO_PRAZO
+  EM_RISCO
+  BATIDA
+  NAO_BATIDA
+}
+
+enum GoalCalculationMode {
+  AUTOMATICO
+  MANUAL
+}
+
+enum Priority {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum TaskStatus {
+  A_FAZER
+  EM_ANDAMENTO
+  AGUARDANDO
+  CONCLUIDA
+  CANCELADA
+}
+
+// ─────────────────────────────── CORE ───────────────────────────────
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(VIEWER)
+  status       UserStatus @default(ATIVO)
+  costCenterId String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  costCenter             CostCenter?       @relation("UserCostCenter", fields: [costCenterId], references: [id])
+  costCentersResponsible CostCenter[]      @relation("CostCenterResponsible")
+  leads                  Lead[]            @relation("LeadResponsible")
+  leadInteractions       LeadInteraction[]
+  clients                Client[]          @relation("ClientResponsible")
+  projects               Project[]         @relation("ProjectResponsible")
+  timesheets             Timesheet[]
+  legalContracts         LegalContract[]   @relation("LegalResponsible")
+  legalDeadlines         LegalDeadline[]   @relation("DeadlineResponsible")
+  legalDocuments         LegalDocument[]   @relation("LegalDocResponsible")
+  legalDemands           LegalDemand[]     @relation("LegalDemandResponsible")
+  legalRisks             LegalRisk[]       @relation("LegalRiskResponsible")
+  goals                  Goal[]            @relation("GoalResponsible")
+  tasksAssigned          Task[]            @relation("TaskAssignee")
+  tasksCreated           Task[]            @relation("TaskCreatedBy")
+  budgetsApproved        Budget[]          @relation("BudgetApprover")
+  approvalsRequested     ApprovalRequest[] @relation("ApprovalRequester")
+  approvalsResponded     ApprovalRequest[] @relation("ApprovalApprover")
+  auditLogs              AuditLog[]
+
+  @@index([role])
+  @@index([status])
+}
+
+model CostCenter {
+  id                   String         @id @default(cuid())
+  code                 Int            @unique // 1000, 2000, 3000, 4000, 5000
+  name                 String
+  description          String?
+  type                 CostCenterType @default(OUTRO)
+  responsibleUserId    String?
+  parentCostCenterId   String?
+  active               Boolean        @default(true)
+  monthlyBudgetDefault Float?
+  annualBudgetDefault  Float?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  responsibleUser     User?               @relation("CostCenterResponsible", fields: [responsibleUserId], references: [id])
+  parent              CostCenter?         @relation("CostCenterHierarchy", fields: [parentCostCenterId], references: [id])
+  children            CostCenter[]        @relation("CostCenterHierarchy")
+  users               User[]              @relation("UserCostCenter")
+  contracts           Contract[]
+  financialEntries    FinancialEntry[]
+  financialCategories FinancialCategory[] @relation("CategoryCostCenter")
+  projects            Project[]
+  campaigns           MarketingCampaign[]
+  proposals           Proposal[]
+  goals               Goal[]
+  tasks               Task[]
+  budgets             Budget[]
+  budgetLines         BudgetLine[]
+  legalContracts      LegalContract[]
+  legalDeadlines      LegalDeadline[]
+  legalDocuments      LegalDocument[]
+  legalDemands        LegalDemand[]
+  legalRisks          LegalRisk[]
+
+  @@index([active])
+  @@index([type])
+}
+
+model FinancialCategory {
+  id           String       @id @default(cuid())
+  code         String       @unique // "1.1", "2.3"...
+  name         String
+  type         CategoryType
+  costCenterId String?
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  costCenter       CostCenter?      @relation("CategoryCostCenter", fields: [costCenterId], references: [id])
+  financialEntries FinancialEntry[]
+  contracts        Contract[]
+  budgetLines      BudgetLine[]
+
+  @@index([type])
+}
+
+// ─────────────────────────────── ORÇAMENTO ───────────────────────────────
+
+model Budget {
+  id             String           @id @default(cuid())
+  costCenterId   String
+  periodType     BudgetPeriodType
+  month          Int?
+  quarter        Int?
+  year           Int
+  plannedRevenue Float            @default(0)
+  plannedExpense Float            @default(0)
+  plannedProfit  Float            @default(0)
+  status         BudgetStatus     @default(RASCUNHO)
+  approvedById   String?
+  approvedAt     DateTime?
+  notes          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  deletedAt      DateTime?
+
+  costCenter CostCenter   @relation(fields: [costCenterId], references: [id])
+  approvedBy User?        @relation("BudgetApprover", fields: [approvedById], references: [id])
+  lines      BudgetLine[]
+
+  @@index([costCenterId])
+  @@index([year, month])
+  @@index([status])
+}
+
+model BudgetLine {
+  id                  String        @id @default(cuid())
+  budgetId            String
+  costCenterId        String
+  financialCategoryId String?
+  type                FinancialType
+  plannedAmount       Float         @default(0)
+  description         String?
+  notes               String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  budget     Budget             @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  costCenter CostCenter         @relation(fields: [costCenterId], references: [id])
+  category   FinancialCategory? @relation(fields: [financialCategoryId], references: [id])
+
+  @@index([budgetId])
+  @@index([costCenterId])
+}
+
+// ─────────────────────────────── APROVAÇÕES ───────────────────────────────
+
+model ApprovalRequest {
+  id            String         @id @default(cuid())
+  type          ApprovalType
+  requestedById String?
+  approvedById  String?
+  status        ApprovalStatus @default(PENDENTE)
+  entityType    String
+  entityId      String
+  amount        Float?
+  reason        String?
+  responseNote  String?
+  createdAt     DateTime       @default(now())
+  respondedAt   DateTime?
+
+  requestedBy User? @relation("ApprovalRequester", fields: [requestedById], references: [id])
+  approvedBy  User? @relation("ApprovalApprover", fields: [approvedById], references: [id])
+
+  @@index([status])
+  @@index([type])
+  @@index([entityType, entityId])
+}
+
+// ─────────────────────────────── CRM / LEADS ───────────────────────────────
+
+model Lead {
+  id                String     @id @default(cuid())
+  name              String
+  company           String?
+  phone             String?
+  email             String?
+  origin            LeadOrigin @default(OUTRO)
+  channel           String?
+  campaignId        String?
+  responsibleId     String?
+  costCenterId      String?
+  status            LeadStatus @default(NOVO)
+  estimatedValue    Float?
+  probability       Int?
+  expectedCloseDate DateTime?
+  notes             String?
+  lossReason        String?
+  tags              String[]   @default([])
+  convertedClientId String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  deletedAt         DateTime?
+
+  campaign        MarketingCampaign? @relation(fields: [campaignId], references: [id])
+  responsible     User?              @relation("LeadResponsible", fields: [responsibleId], references: [id])
+  convertedClient Client?            @relation("LeadConverted", fields: [convertedClientId], references: [id])
+  interactions    LeadInteraction[]
+  tasks           Task[]             @relation("LeadTasks")
+
+  @@index([status])
+  @@index([origin])
+  @@index([responsibleId])
+  @@index([createdAt])
+}
+
+model LeadInteraction {
+  id        String              @id @default(cuid())
+  leadId    String
+  userId    String?
+  type      LeadInteractionType @default(NOTA)
+  content   String
+  createdAt DateTime            @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([leadId])
+}
+
+// ─────────────────────────────── COMERCIAL ───────────────────────────────
+
+model Client {
+  id                    String       @id @default(cuid())
+  name                  String
+  tradeName             String?
+  document              String?
+  email                 String?
+  phone                 String?
+  internalResponsibleId String?
+  status                ClientStatus @default(PROSPECT)
+  origin                LeadOrigin?
+  healthScore           Int          @default(50)
+  notes                 String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  deletedAt             DateTime?
+
+  internalResponsible User?            @relation("ClientResponsible", fields: [internalResponsibleId], references: [id])
+  contracts           Contract[]
+  proposals           Proposal[]
+  projects            Project[]
+  financialEntries    FinancialEntry[]
+  convertedLeads      Lead[]           @relation("LeadConverted")
+  legalContracts      LegalContract[]
+  legalDocuments      LegalDocument[]
+  legalDemands        LegalDemand[]
+  tasks               Task[]           @relation("ClientTasks")
+
+  @@index([status])
+  @@index([internalResponsibleId])
+}
+
+model Proposal {
+  id           String         @id @default(cuid())
+  clientId     String?
+  leadId       String?
+  costCenterId String?
+  title        String
+  value        Float          @default(0)
+  status       ProposalStatus @default(RASCUNHO)
+  probability  Int?
+  expectedDate DateTime?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+
+  client     Client?     @relation(fields: [clientId], references: [id])
+  costCenter CostCenter? @relation(fields: [costCenterId], references: [id])
+
+  @@index([status])
+  @@index([clientId])
+}
+
+model Contract {
+  id           String         @id @default(cuid())
+  clientId     String
+  title        String
+  type         ContractType
+  totalValue   Float?
+  monthlyValue Float?
+  startDate    DateTime?
+  endDate      DateTime?
+  status       ContractStatus @default(ATIVO)
+  costCenterId String?
+  categoryId   String?
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  deletedAt    DateTime?
+
+  client           Client             @relation(fields: [clientId], references: [id])
+  costCenter       CostCenter?        @relation(fields: [costCenterId], references: [id])
+  category         FinancialCategory? @relation(fields: [categoryId], references: [id])
+  financialEntries FinancialEntry[]
+  projects         Project[]
+  tasks            Task[]             @relation("ContractTasks")
+
+  @@index([status])
+  @@index([type])
+  @@index([clientId])
+}
+
+// ─────────────────────────────── FINANCEIRO ───────────────────────────────
+
+model FinancialEntry {
+  id                String          @id @default(cuid())
+  description       String
+  type              FinancialType
+  value             Float           @default(0)
+  dueDate           DateTime?
+  paymentDate       DateTime?
+  competenceMonth   Int // 1-12
+  competenceYear    Int
+  status            FinancialStatus @default(PENDENTE)
+  costCenterId      String?
+  categoryId        String?
+  clientId          String?
+  contractId        String?
+  projectId         String?
+  campaignId        String?
+  recurring         Boolean         @default(false)
+  installments      Int?
+  installmentNumber Int?
+  paymentMethod     PaymentMethod?
+  notes             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+
+  costCenter CostCenter?        @relation(fields: [costCenterId], references: [id])
+  category   FinancialCategory? @relation(fields: [categoryId], references: [id])
+  client     Client?            @relation(fields: [clientId], references: [id])
+  contract   Contract?          @relation(fields: [contractId], references: [id])
+  project    Project?           @relation(fields: [projectId], references: [id])
+  campaign   MarketingCampaign? @relation(fields: [campaignId], references: [id])
+  tasks      Task[]             @relation("FinancialTasks")
+
+  @@index([type])
+  @@index([status])
+  @@index([competenceYear, competenceMonth])
+  @@index([dueDate])
+  @@index([costCenterId])
+  @@index([categoryId])
+}
+
+// ─────────────────────────────── INOVAÇÃO / TI ───────────────────────────────
+
+model Project {
+  id            String        @id @default(cuid())
+  clientId      String?
+  contractId    String?
+  name          String
+  type          ProjectType
+  status        ProjectStatus @default(PLANEJADO)
+  budgetValue   Float? // valor orçado
+  estimatedCost Float?
+  hourlyRate    Float? // usado para custo real = horas * hourlyRate
+  startDate     DateTime?
+  deadline      DateTime?
+  responsibleId String?
+  costCenterId  String?
+  description   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  client           Client?          @relation(fields: [clientId], references: [id])
+  contract         Contract?        @relation(fields: [contractId], references: [id])
+  responsible      User?            @relation("ProjectResponsible", fields: [responsibleId], references: [id])
+  costCenter       CostCenter?      @relation(fields: [costCenterId], references: [id])
+  timesheets       Timesheet[]
+  financialEntries FinancialEntry[]
+  tasks            Task[]           @relation("ProjectTasks")
+
+  @@index([status])
+  @@index([type])
+  @@index([responsibleId])
+}
+
+model Timesheet {
+  id          String        @id @default(cuid())
+  userId      String
+  projectId   String
+  date        DateTime
+  hours       Float
+  description String?
+  type        TimesheetType @default(DESENVOLVIMENTO)
+  productive  Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([date])
+}
+
+// ─────────────────────────────── MARKETING ───────────────────────────────
+
+model MarketingCampaign {
+  id                String          @id @default(cuid())
+  name              String
+  channel           CampaignChannel
+  objective         String?
+  budget            Float?
+  actualSpend       Float?
+  leadsGenerated    Int             @default(0)
+  clientsGenerated  Int             @default(0)
+  attributedRevenue Float?
+  startDate         DateTime?
+  endDate           DateTime?
+  status            CampaignStatus  @default(PLANEJADA)
+  costCenterId      String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+
+  costCenter       CostCenter?      @relation(fields: [costCenterId], references: [id])
+  leads            Lead[]
+  financialEntries FinancialEntry[]
+  tasks            Task[]           @relation("CampaignTasks")
+
+  @@index([channel])
+  @@index([status])
+}
+
+// ─────────────────────────────── JURÍDICO ───────────────────────────────
+
+model LegalContract {
+  id                   String              @id @default(cuid())
+  title                String
+  counterpartyName     String?
+  counterpartyDocument String?
+  supplierName         String?
+  clientId             String?
+  type                 LegalContractType
+  status               LegalContractStatus @default(RASCUNHO)
+  startDate            DateTime?
+  endDate              DateTime?
+  signatureDate        DateTime?
+  signedAt             DateTime?
+  renewalDate          DateTime?
+  expirationDate       DateTime?
+  contractValue        Float?
+  monthlyValue         Float?
+  responsibleId        String?
+  costCenterId         String?
+  fileUrl              String?
+  externalLink         String?
+  riskLevel            RiskLevel           @default(BAIXO)
+  notes                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  deletedAt            DateTime?
+
+  client      Client?         @relation(fields: [clientId], references: [id])
+  responsible User?           @relation("LegalResponsible", fields: [responsibleId], references: [id])
+  costCenter  CostCenter?     @relation(fields: [costCenterId], references: [id])
+  deadlines   LegalDeadline[]
+  documents   LegalDocument[]
+  demands     LegalDemand[]   @relation("ContractDemands")
+  tasks       Task[]          @relation("LegalTasks")
+
+  @@index([status])
+  @@index([type])
+  @@index([riskLevel])
+}
+
+model LegalDeadline {
+  id              String              @id @default(cuid())
+  title           String
+  description     String?
+  legalContractId String?
+  legalDemandId   String?
+  date            DateTime
+  priority        Priority            @default(MEDIA)
+  status          LegalDeadlineStatus @default(PENDENTE)
+  responsibleId   String?
+  costCenterId    String?
+  completedAt     DateTime?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  legalContract LegalContract? @relation(fields: [legalContractId], references: [id])
+  legalDemand   LegalDemand?   @relation(fields: [legalDemandId], references: [id])
+  responsible   User?          @relation("DeadlineResponsible", fields: [responsibleId], references: [id])
+  costCenter    CostCenter?    @relation(fields: [costCenterId], references: [id])
+
+  @@index([status])
+  @@index([date])
+}
+
+model LegalDocument {
+  id              String              @id @default(cuid())
+  title           String
+  type            LegalDocumentType
+  status          LegalDocumentStatus @default(RASCUNHO)
+  legalContractId String?
+  clientId        String?
+  fileUrl         String?
+  externalLink    String?
+  expirationDate  DateTime?
+  responsibleId   String?
+  costCenterId    String?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
+
+  legalContract LegalContract? @relation(fields: [legalContractId], references: [id])
+  client        Client?        @relation(fields: [clientId], references: [id])
+  responsible   User?          @relation("LegalDocResponsible", fields: [responsibleId], references: [id])
+  costCenter    CostCenter?    @relation(fields: [costCenterId], references: [id])
+
+  @@index([status])
+  @@index([type])
+}
+
+model LegalDemand {
+  id              String            @id @default(cuid())
+  title           String
+  description     String?
+  type            LegalDemandType
+  status          LegalDemandStatus @default(ABERTA)
+  priority        Priority          @default(MEDIA)
+  clientId        String?
+  legalContractId String?
+  responsibleId   String?
+  costCenterId    String?
+  openedAt        DateTime          @default(now())
+  resolvedAt      DateTime?
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+
+  client        Client?         @relation(fields: [clientId], references: [id])
+  legalContract LegalContract?  @relation("ContractDemands", fields: [legalContractId], references: [id])
+  responsible   User?           @relation("LegalDemandResponsible", fields: [responsibleId], references: [id])
+  costCenter    CostCenter?     @relation(fields: [costCenterId], references: [id])
+  deadlines     LegalDeadline[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model LegalRisk {
+  id                String          @id @default(cuid())
+  title             String
+  description       String?
+  type              LegalRiskType
+  probability       RiskScale       @default(MEDIO)
+  impact            RiskScale       @default(MEDIO)
+  riskLevel         RiskLevel       @default(MEDIO)
+  mitigationPlan    String?
+  status            LegalRiskStatus @default(ABERTO)
+  responsibleId     String?
+  costCenterId      String?
+  relatedEntityType String?
+  relatedEntityId   String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+
+  responsible User?       @relation("LegalRiskResponsible", fields: [responsibleId], references: [id])
+  costCenter  CostCenter? @relation(fields: [costCenterId], references: [id])
+
+  @@index([status])
+  @@index([riskLevel])
+}
+
+// ─────────────────────────────── METAS ───────────────────────────────
+
+model Goal {
+  id                 String              @id @default(cuid())
+  title              String
+  description        String?
+  type               GoalType
+  period             GoalPeriod
+  month              Int?
+  quarter            Int?
+  year               Int
+  targetValue        Float               @default(0)
+  currentValue       Float               @default(0)
+  progressPercentage Float               @default(0)
+  unit               GoalUnit            @default(REAIS)
+  calculationMode    GoalCalculationMode @default(MANUAL)
+  responsibleId      String?
+  costCenterId       String?
+  status             GoalStatus          @default(NO_PRAZO)
+  startDate          DateTime?
+  endDate            DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
+
+  responsible User?       @relation("GoalResponsible", fields: [responsibleId], references: [id])
+  costCenter  CostCenter? @relation(fields: [costCenterId], references: [id])
+  tasks       Task[]      @relation("GoalTasks")
+
+  @@index([type])
+  @@index([year, month])
+  @@index([costCenterId])
+}
+
+// ─────────────────────────────── TAREFAS ───────────────────────────────
+
+model Task {
+  id             String     @id @default(cuid())
+  title          String
+  description    String?
+  assigneeId     String?
+  costCenterId   String?
+  priority       Priority   @default(MEDIA)
+  status         TaskStatus @default(A_FAZER)
+  dueDate        DateTime?
+  completedAt    DateTime?
+  module         ModuleKey? @default(GERAL)
+  entityType     String?
+  entityId       String?
+  estimatedHours Float?
+  actualHours    Float?
+  recurrence     String?
+  tags           String[]   @default([])
+  notes          String?
+  createdById    String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+
+  // Vínculos polimórficos opcionais
+  leadId           String?
+  clientId         String?
+  contractId       String?
+  projectId        String?
+  campaignId       String?
+  goalId           String?
+  legalContractId  String?
+  financialEntryId String?
+
+  assignee       User?              @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy      User?              @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  costCenter     CostCenter?        @relation(fields: [costCenterId], references: [id])
+  lead           Lead?              @relation("LeadTasks", fields: [leadId], references: [id])
+  client         Client?            @relation("ClientTasks", fields: [clientId], references: [id])
+  contract       Contract?          @relation("ContractTasks", fields: [contractId], references: [id])
+  project        Project?           @relation("ProjectTasks", fields: [projectId], references: [id])
+  campaign       MarketingCampaign? @relation("CampaignTasks", fields: [campaignId], references: [id])
+  goal           Goal?              @relation("GoalTasks", fields: [goalId], references: [id])
+  legalContract  LegalContract?     @relation("LegalTasks", fields: [legalContractId], references: [id])
+  financialEntry FinancialEntry?    @relation("FinancialTasks", fields: [financialEntryId], references: [id])
+
+  @@index([status])
+  @@index([priority])
+  @@index([assigneeId])
+  @@index([dueDate])
+  @@index([module])
+  @@index([costCenterId])
+}
+
+// ─────────────────────────────── AUDITORIA ───────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}

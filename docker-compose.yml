@@ -1,0 +1,38 @@
+# Stack isolado do Chronostek. O Postgres NÃO publica porta (fica apenas na
+# rede interna do compose). Só o app web é exposto (porta 8080).
+services:
+  db:
+    image: postgres:16
+    container_name: chronostek-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: chronostek
+    volumes:
+      - chronostek_pgdata:/var/lib/postgresql/data
+    networks:
+      - chronostek
+
+  web:
+    build: .
+    container_name: chronostek-web
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/chronostek?sslmode=disable
+      AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL}
+      AUTH_TRUST_HOST: "true"
+      NODE_ENV: production
+    ports:
+      - "8080:3000"
+    networks:
+      - chronostek
+
+volumes:
+  chronostek_pgdata:
+
+networks:
+  chronostek:
+    driver: bridge
