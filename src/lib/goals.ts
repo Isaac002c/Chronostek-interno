@@ -256,8 +256,18 @@ export async function recomputeGoalTree(performedById?: string | null): Promise<
     computed.set(g.id, current);
 
     const { start, end } = goalDateRange(g);
-    const canceled = g.status === "CANCELADA";
-    const status = computeGoalStatus(g.targetValue, current, start, end, now, canceled);
+    // Status: recalculado apenas para metas AUTOMÁTICAS ou que agregam filhas.
+    // Metas-folha MANUAIS preservam o status definido pelo usuário (CANCELADA sempre fica).
+    const isAggregated = kids.length > 0;
+    const isAuto = g.calculationMode === "AUTOMATICO";
+    let status: GoalStatus;
+    if (g.status === "CANCELADA") {
+      status = "CANCELADA";
+    } else if (isAggregated || isAuto) {
+      status = computeGoalStatus(g.targetValue, current, start, end, now, false);
+    } else {
+      status = g.status;
+    }
     const progress = g.targetValue > 0 ? (current / g.targetValue) * 100 : 0;
 
     const data: {

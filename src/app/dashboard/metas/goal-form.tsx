@@ -159,7 +159,7 @@ export function GoalForm({
         <Field label="Cálculo" htmlFor="calculationMode" required hint="No automático, o valor atual vem dos dados (receita, leads, MRR, horas...).">
           <Select id="calculationMode" name="calculationMode" defaultValue={defaults.calculationMode ?? "MANUAL"} options={CALC_MODE_OPTIONS} />
         </Field>
-        <Field label="Status" htmlFor="status" required error={fe.status} hint="Recalculado automaticamente; use Cancelada para encerrar a meta.">
+        <Field label="Status" htmlFor="status" required error={fe.status} hint="Em metas manuais o status que você escolher é mantido. Metas automáticas ou com filhas são recalculadas.">
           <Select id="status" name="status" defaultValue={defaults.status ?? "EM_ANDAMENTO"} options={GOAL_STATUS_OPTIONS} />
         </Field>
 
