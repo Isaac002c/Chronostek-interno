@@ -75,14 +75,20 @@ export function GoalForm({
   const fe = state.fieldErrors ?? {};
 
   const [level, setLevel] = useState(defaults.hierarchyLevel ?? "AVULSA");
+  const [period, setPeriod] = useState(defaults.period ?? "MENSAL");
   const [year, setYear] = useState(String(defaults.year ?? new Date().getFullYear()));
   const [month, setMonth] = useState(defaults.month ? String(defaults.month) : "");
 
-  const showQuarter = level === "TRIMESTRAL";
-  const showMonth = level === "MENSAL" || level === "SEMANAL";
-  const showWeek = level === "SEMANAL";
+  // Para níveis hierárquicos o período é derivado do nível; para AVULSA, vem do select.
+  const effectivePeriod =
+    level === "TRIMESTRAL" ? "TRIMESTRAL" : level === "MENSAL" ? "MENSAL" : level === "SEMANAL" ? "SEMANAL" : period;
+
   const showPeriod = level === "AVULSA";
+  const showQuarter = effectivePeriod === "TRIMESTRAL";
+  const showMonth = effectivePeriod === "MENSAL" || effectivePeriod === "SEMANAL";
+  const showWeek = effectivePeriod === "SEMANAL";
   const showParent = level === "MENSAL" || level === "SEMANAL";
+  const reqByLevel = level !== "AVULSA";
 
   // Pais compatíveis com o nível/ano/mês escolhidos.
   const parentChoices = parents.filter((p) => {
@@ -127,24 +133,24 @@ export function GoalForm({
 
         {showPeriod && (
           <Field label="Período" htmlFor="period" required error={fe.period}>
-            <Select id="period" name="period" defaultValue={defaults.period ?? "MENSAL"} options={GOAL_PERIOD_OPTIONS} />
+            <Select id="period" name="period" value={period} onChange={(e) => setPeriod(e.target.value)} options={GOAL_PERIOD_OPTIONS} />
           </Field>
         )}
         <Field label="Ano" htmlFor="year" required error={fe.year}>
           <Input id="year" name="year" type="number" min="2000" max="2100" value={year} onChange={(e) => setYear(e.target.value)} />
         </Field>
         {showQuarter && (
-          <Field label="Trimestre (1-4)" htmlFor="quarter" required error={fe.quarter}>
+          <Field label="Trimestre (1-4)" htmlFor="quarter" required={reqByLevel} error={fe.quarter}>
             <Input id="quarter" name="quarter" type="number" min="1" max="4" defaultValue={defaults.quarter ?? ""} />
           </Field>
         )}
         {showMonth && (
-          <Field label="Mês (1-12)" htmlFor="month" required error={fe.month}>
+          <Field label="Mês (1-12)" htmlFor="month" required={reqByLevel} error={fe.month}>
             <Input id="month" name="month" type="number" min="1" max="12" value={month} onChange={(e) => setMonth(e.target.value)} />
           </Field>
         )}
         {showWeek && (
-          <Field label="Semana" htmlFor="week" required error={fe.week}>
+          <Field label="Semana" htmlFor="week" required={reqByLevel} error={fe.week}>
             <Select id="week" name="week" defaultValue={defaults.week ? String(defaults.week) : ""} placeholder="Selecione" options={WEEK_OPTIONS} />
           </Field>
         )}

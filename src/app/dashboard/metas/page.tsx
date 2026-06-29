@@ -151,13 +151,16 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
     };
   }
 
-  const strategicRoots = goals.filter((g) => g.hierarchyLevel !== "AVULSA" && !g.parentGoalId);
+  // Estratégicas: apenas metas TRIMESTRAIS (topo da hierarquia), com filhas aninhadas.
+  const strategicRoots = goals.filter((g) => g.hierarchyLevel === "TRIMESTRAL");
   const strategicNodes = strategicRoots.map((g) => toNode(byId.get(g.id)!));
 
-  // Metas individuais: metas vinculadas (com pai), agrupadas pelo responsável principal.
-  const linked = goals.filter((g) => g.parentGoalId);
+  // Individuais: metas mensais e semanais (vinculadas ou não), agrupadas pelo responsável.
+  const individualGoals = goals.filter(
+    (g) => g.hierarchyLevel === "MENSAL" || g.hierarchyLevel === "SEMANAL",
+  );
   const groups = new Map<string, GoalNode[]>();
-  for (const g of linked) {
+  for (const g of individualGoals) {
     const resp = responsiblesOf(byId.get(g.id)!)[0] ?? "Sem responsável";
     const node = toNode(byId.get(g.id)!, new Set(), false);
     const arr = groups.get(resp) ?? [];
@@ -174,9 +177,7 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
   const emRisco = goals.filter((g) => g.status === "EM_RISCO").length;
   const atrasadas = goals.filter((g) => g.status === "ATRASADA" || g.status === "NAO_BATIDA").length;
   const overall = total > 0 ? Math.round(goals.reduce((s, g) => s + Math.min(100, Math.max(0, g.progressPercentage)), 0) / total) : 0;
-  const mainTri = [...strategicRoots]
-    .filter((g) => g.hierarchyLevel === "TRIMESTRAL")
-    .sort((a, b) => b.targetValue - a.targetValue)[0];
+  const mainTri = [...strategicRoots].sort((a, b) => b.targetValue - a.targetValue)[0];
 
   const writable = canWrite(user.role);
 
