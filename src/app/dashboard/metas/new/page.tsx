@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
-import { getUserOptions, getCostCenterOptions } from "@/lib/options";
+import { getUserOptions, getCostCenterOptions, getGoalParentCandidates } from "@/lib/options";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,9 +16,10 @@ export default async function NewGoalPage() {
   const user = await requireModule("METAS");
   if (!canWrite(user.role)) redirect("/dashboard/metas");
 
-  const [users, costCenters] = await Promise.all([
+  const [users, costCenters, parents] = await Promise.all([
     getUserOptions(),
     getCostCenterOptions(),
+    getGoalParentCandidates(),
   ]);
 
   return (
@@ -33,7 +34,7 @@ export default async function NewGoalPage() {
       </PageHeader>
       <Card>
         <CardContent className="pt-6">
-          <GoalForm action={createGoal} users={users} costCenters={costCenters} />
+          <GoalForm action={createGoal} users={users} costCenters={costCenters} parents={parents} />
         </CardContent>
       </Card>
     </>

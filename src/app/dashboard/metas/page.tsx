@@ -1,33 +1,31 @@
 import Link from "next/link";
-import { Plus, Pencil, Filter, Target, RefreshCw } from "lucide-react";
-import { Prisma, GoalType, GoalPeriod } from "@prisma/client";
+import { Plus, Filter, Target, RefreshCw, Trophy, AlertTriangle, Clock, ListChecks } from "lucide-react";
+import { Prisma, GoalType, GoalStatus, type Goal } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
-import { formatCurrency, formatNumber, monthShort } from "@/lib/format";
-import {
-  GOAL_TYPE_LABELS,
-  GOAL_STATUS_LABELS,
-  GOAL_STATUS_TONE,
-  GOAL_TYPE_OPTIONS,
-  GOAL_PERIOD_OPTIONS,
-} from "@/lib/enums";
+import { getUserOptions, getCostCenterOptions } from "@/lib/options";
+import { goalPace } from "@/lib/goals";
+import { formatCurrency, formatNumber, formatDate, monthShort } from "@/lib/format";
+import { GOAL_TYPE_OPTIONS, GOAL_STATUS_OPTIONS } from "@/lib/enums";
 import { PageHeader } from "@/components/ui/page-header";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DeleteButton } from "@/components/form/delete-button";
 import { ActionButton } from "@/components/form/action-button";
-import { deleteGoal, recalcAutomaticGoals } from "./actions";
+import { recalcAutomaticGoals } from "./actions";
+import { GoalTree, GoalFlatList, type GoalNode } from "./goal-tree";
 
 export const dynamic = "force-dynamic";
 
 type SP = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined) =>
-  Array.isArray(v) ? v[0] : (v ?? "");
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
+
+const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: monthShort(i + 1) }));
+const QUARTER_OPTIONS = [1, 2, 3, 4].map((q) => ({ value: String(q), label: `${q}º trimestre` }));
 
 function fmtVal(value: number, unit: string): string {
   switch (unit) {
@@ -42,45 +40,152 @@ function fmtVal(value: number, unit: string): string {
   }
 }
 
-function periodLabel(g: { period: string; month: number | null; quarter: number | null; year: number }): string {
-  if (g.period === "MENSAL" && g.month) return `${monthShort(g.month)}/${g.year}`;
-  if (g.period === "TRIMESTRAL" && g.quarter) return `${g.quarter}º tri ${g.year}`;
+function goalPeriodLabel(g: Goal): string {
+  if (g.hierarchyLevel === "TRIMESTRAL" || (g.period === "TRIMESTRAL" && g.quarter))
+    return `${g.quarter}º tri ${g.year}`;
+  if (g.hierarchyLevel === "SEMANAL" || g.period === "SEMANAL")
+    return `Sem ${g.week ?? "?"} · ${g.month ? monthShort(g.month) : ""}/${g.year}`;
+  if (g.month) return `${monthShort(g.month)}/${g.year}`;
   return `${g.year}`;
 }
 
-export default async function MetasPage({
-  searchParams,
-}: {
-  searchParams: Promise<SP>;
-}) {
+type GoalWithRefs = Goal & {
+  assignees: { isPrimary: boolean; user: { name: string } }[];
+  responsible: { name: string } | null;
+};
+
+function responsiblesOf(g: GoalWithRefs): string[] {
+  if (g.assignees.length > 0) {
+    return [...g.assignees]
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
+      .map((a) => a.user.name);
+  }
+  return g.responsible ? [g.responsible.name] : [];
+}
+
+function statusMessage(g: Goal): string | null {
+  const now = new Date();
+  if (g.status === "ATRASADA" || g.status === "NAO_BATIDA") {
+    const p = goalPace(g, now);
+    const late = p.daysLate > 0 ? `Atrasada há ${p.daysLate} dia${p.daysLate === 1 ? "" : "s"}` : "Prazo encerrado";
+    return `${late} · Faltam ${fmtVal(p.remaining, g.unit)}`;
+  }
+  if (g.status === "EM_RISCO") {
+    const p = goalPace(g, now);
+    return `Ritmo atual: ${fmtVal(p.currentPerWeek, g.unit)}/sem · Necessário: ${fmtVal(p.neededPerWeek, g.unit)}/sem`;
+  }
+  return null;
+}
+
+function achievedLabel(g: Goal): string | null {
+  if (g.status === "SUPERADA")
+    return `Meta superada: ${Math.round(g.progressPercentage)}% concluído${g.achievedAt ? ` · em ${formatDate(g.achievedAt)}` : ""}`;
+  if (g.status === "BATIDA")
+    return g.achievedAt ? `Meta batida em ${formatDate(g.achievedAt)}` : "Meta batida";
+  return null;
+}
+
+export default async function MetasPage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireModule("METAS");
   const sp = await searchParams;
-  const type = one(sp.type);
-  const period = one(sp.period);
+  const fYear = one(sp.year);
+  const fQuarter = one(sp.quarter);
+  const fMonth = one(sp.month);
+  const fType = one(sp.type);
+  const fStatus = one(sp.status);
+  const fResp = one(sp.responsible);
+  const fCc = one(sp.costCenter);
 
   const where: Prisma.GoalWhereInput = { deletedAt: null };
-  if (type && type in GoalType) where.type = type as GoalType;
-  if (period && period in GoalPeriod) where.period = period as GoalPeriod;
+  if (fYear) where.year = Number(fYear);
+  if (fQuarter) where.quarter = Number(fQuarter);
+  if (fMonth) where.month = Number(fMonth);
+  if (fType && fType in GoalType) where.type = fType as GoalType;
+  if (fStatus && fStatus in GoalStatus) where.status = fStatus as GoalStatus;
+  if (fCc) where.costCenterId = fCc;
+  if (fResp) where.OR = [{ responsibleId: fResp }, { assignees: { some: { userId: fResp } } }];
 
-  const goals = await prisma.goal.findMany({
-    where,
-    include: { responsible: { select: { name: true } } },
-    orderBy: [{ year: "desc" }, { createdAt: "desc" }],
-    take: 100,
-  });
+  const [goals, users, costCenters] = await Promise.all([
+    prisma.goal.findMany({
+      where,
+      include: {
+        assignees: { select: { isPrimary: true, user: { select: { name: true } } } },
+        responsible: { select: { name: true } },
+      },
+      orderBy: [{ year: "desc" }, { quarter: "asc" }, { month: "asc" }, { week: "asc" }, { createdAt: "desc" }],
+      take: 500,
+    }),
+    getUserOptions(),
+    getCostCenterOptions(),
+  ]);
+
+  const byId = new Map(goals.map((g) => [g.id, g as GoalWithRefs]));
+  const childrenOf = new Map<string, GoalWithRefs[]>();
+  for (const g of goals) {
+    if (!g.parentGoalId) continue;
+    const arr = childrenOf.get(g.parentGoalId) ?? [];
+    arr.push(g as GoalWithRefs);
+    childrenOf.set(g.parentGoalId, arr);
+  }
+
+  function toNode(g: GoalWithRefs, visited = new Set<string>(), withChildren = true): GoalNode {
+    visited.add(g.id);
+    const kids = withChildren ? (childrenOf.get(g.id) ?? []).filter((k) => !visited.has(k.id)) : [];
+    const childNodes = kids.map((k) => toNode(k, visited, true));
+    const doneKids = kids.filter((k) => k.status === "BATIDA" || k.status === "SUPERADA").length;
+    return {
+      id: g.id,
+      title: g.title,
+      level: g.hierarchyLevel,
+      status: g.status,
+      periodLabel: goalPeriodLabel(g),
+      currentLabel: fmtVal(g.currentValue, g.unit),
+      targetLabel: fmtVal(g.targetValue, g.unit),
+      progress: g.targetValue > 0 ? (g.currentValue / g.targetValue) * 100 : 0,
+      responsibles: responsiblesOf(g),
+      parentTitle: g.parentGoalId ? (byId.get(g.parentGoalId)?.title ?? null) : null,
+      achievedLabel: achievedLabel(g),
+      message: statusMessage(g),
+      childrenSummary: kids.length > 0 ? `${doneKids} de ${kids.length} metas filhas batidas` : null,
+      children: childNodes,
+    };
+  }
+
+  const strategicRoots = goals.filter((g) => g.hierarchyLevel !== "AVULSA" && !g.parentGoalId);
+  const strategicNodes = strategicRoots.map((g) => toNode(byId.get(g.id)!));
+
+  // Metas individuais: metas vinculadas (com pai), agrupadas pelo responsável principal.
+  const linked = goals.filter((g) => g.parentGoalId);
+  const groups = new Map<string, GoalNode[]>();
+  for (const g of linked) {
+    const resp = responsiblesOf(byId.get(g.id)!)[0] ?? "Sem responsável";
+    const node = toNode(byId.get(g.id)!, new Set(), false);
+    const arr = groups.get(resp) ?? [];
+    arr.push(node);
+    groups.set(resp, arr);
+  }
+
+  const avulsas = goals.filter((g) => g.hierarchyLevel === "AVULSA");
+  const avulsaNodes = avulsas.map((g) => toNode(byId.get(g.id)!, new Set(), false));
+
+  // Resumo.
+  const total = goals.length;
+  const batidas = goals.filter((g) => g.status === "BATIDA" || g.status === "SUPERADA").length;
+  const emRisco = goals.filter((g) => g.status === "EM_RISCO").length;
+  const atrasadas = goals.filter((g) => g.status === "ATRASADA" || g.status === "NAO_BATIDA").length;
+  const overall = total > 0 ? Math.round(goals.reduce((s, g) => s + Math.min(100, Math.max(0, g.progressPercentage)), 0) / total) : 0;
+  const mainTri = [...strategicRoots]
+    .filter((g) => g.hierarchyLevel === "TRIMESTRAL")
+    .sort((a, b) => b.targetValue - a.targetValue)[0];
 
   const writable = canWrite(user.role);
 
   return (
     <>
-      <PageHeader title="Metas" description="Metas por período, área, centro de custo ou responsável.">
+      <PageHeader title="Metas" description="Metas estratégicas, individuais e avulsas — hierarquia trimestral → mensal → semanal.">
         {writable && (
           <>
-            <ActionButton
-              action={recalcAutomaticGoals}
-              successMessage="Metas automáticas recalculadas."
-              variant="outline"
-            >
+            <ActionButton action={recalcAutomaticGoals} successMessage="Metas recalculadas." variant="outline">
               <RefreshCw />
               Recalcular automáticas
             </ActionButton>
@@ -94,15 +199,38 @@ export default async function MetasPage({
         )}
       </PageHeader>
 
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard label="Metas totais" value={total} icon={Target} />
+        <StatCard label="Batidas / superadas" value={batidas} tone="success" icon={Trophy} />
+        <StatCard label="Em risco" value={emRisco} tone="warning" icon={AlertTriangle} />
+        <StatCard label="Atrasadas" value={atrasadas} tone="danger" icon={Clock} />
+        <StatCard label="Conclusão geral" value={`${overall}%`} icon={ListChecks} hint={mainTri ? `Principal: ${mainTri.title}` : undefined} />
+      </div>
+
       <Card className="p-4">
         <form className="grid gap-3 md:grid-cols-12">
-          <div className="md:col-span-4">
-            <Select name="type" defaultValue={type} placeholder="Tipo" options={GOAL_TYPE_OPTIONS} />
+          <div className="md:col-span-2">
+            <Input name="year" type="number" min="2000" max="2100" placeholder="Ano" defaultValue={fYear} />
           </div>
-          <div className="md:col-span-4">
-            <Select name="period" defaultValue={period} placeholder="Período" options={GOAL_PERIOD_OPTIONS} />
+          <div className="md:col-span-2">
+            <Select name="quarter" defaultValue={fQuarter} placeholder="Trimestre" options={QUARTER_OPTIONS} />
           </div>
-          <div className="flex items-center gap-2 md:col-span-4">
+          <div className="md:col-span-2">
+            <Select name="month" defaultValue={fMonth} placeholder="Mês" options={MONTH_OPTIONS} />
+          </div>
+          <div className="md:col-span-2">
+            <Select name="type" defaultValue={fType} placeholder="Tipo" options={GOAL_TYPE_OPTIONS} />
+          </div>
+          <div className="md:col-span-2">
+            <Select name="status" defaultValue={fStatus} placeholder="Status" options={GOAL_STATUS_OPTIONS} />
+          </div>
+          <div className="md:col-span-2">
+            <Select name="responsible" defaultValue={fResp} placeholder="Responsável" options={users} />
+          </div>
+          <div className="md:col-span-3">
+            <Select name="costCenter" defaultValue={fCc} placeholder="Centro de custo / Área" options={costCenters} />
+          </div>
+          <div className="flex items-center gap-2 md:col-span-3">
             <Button type="submit" size="sm">
               <Filter />
               Filtrar
@@ -114,7 +242,7 @@ export default async function MetasPage({
         </form>
       </Card>
 
-      {goals.length === 0 ? (
+      {total === 0 ? (
         <EmptyState
           icon={Target}
           title="Nenhuma meta"
@@ -131,65 +259,32 @@ export default async function MetasPage({
           }
         />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {goals.map((g) => {
-            const progress =
-              g.targetValue > 0 ? (g.currentValue / g.targetValue) * 100 : 0;
-            const clamped = Math.min(100, Math.max(0, progress));
-            const barColor =
-              progress >= 100
-                ? "bg-emerald-500"
-                : progress >= 60
-                  ? "bg-sky-500"
-                  : progress >= 30
-                    ? "bg-amber-500"
-                    : "bg-red-500";
-            return (
-              <Card key={g.id} className="p-5">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{g.title}</p>
-                    <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Badge tone="neutral">{GOAL_TYPE_LABELS[g.type]}</Badge>
-                      {periodLabel(g)}
-                    </p>
-                  </div>
-                  <StatusBadge value={g.status} labels={GOAL_STATUS_LABELS} tones={GOAL_STATUS_TONE} />
-                </div>
+        <div className="space-y-8">
+          {strategicNodes.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">Metas estratégicas</h2>
+              <GoalTree nodes={strategicNodes} />
+            </section>
+          )}
 
-                <div className="mt-4">
-                  <div className="mb-1 flex items-baseline justify-between text-sm">
-                    <span className="font-medium">{fmtVal(g.currentValue, g.unit)}</span>
-                    <span className="text-muted-foreground">
-                      de {fmtVal(g.targetValue, g.unit)}
-                    </span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-muted">
-                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${clamped}%` }} />
-                  </div>
-                  <p className="mt-1 text-right text-xs font-medium text-muted-foreground">
-                    {Math.round(progress)}%
-                  </p>
+          {groups.size > 0 && (
+            <section className="space-y-4">
+              <h2 className="text-sm font-semibold text-muted-foreground">Metas individuais</h2>
+              {[...groups.entries()].map(([resp, nodes]) => (
+                <div key={resp} className="space-y-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{resp}</p>
+                  <GoalFlatList nodes={nodes} />
                 </div>
+              ))}
+            </section>
+          )}
 
-                <div className="mt-4 flex items-center justify-between border-t pt-3">
-                  <span className="text-xs text-muted-foreground">
-                    {g.responsible?.name ?? "Sem responsável"}
-                  </span>
-                  {writable && (
-                    <div className="flex items-center gap-1">
-                      <Button asChild variant="ghost" size="icon">
-                        <Link href={`/dashboard/metas/${g.id}/edit`}>
-                          <Pencil />
-                        </Link>
-                      </Button>
-                      <DeleteButton action={deleteGoal.bind(null, g.id)} iconOnly confirmMessage={`Excluir a meta "${g.title}"?`} />
-                    </div>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
+          {avulsaNodes.length > 0 && (
+            <section className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">Metas avulsas</h2>
+              <GoalFlatList nodes={avulsaNodes} />
+            </section>
+          )}
         </div>
       )}
     </>

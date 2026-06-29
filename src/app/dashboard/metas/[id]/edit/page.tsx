@@ -4,7 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
-import { getUserOptions, getCostCenterOptions } from "@/lib/options";
+import { getUserOptions, getCostCenterOptions, getGoalParentCandidates } from "@/lib/options";
+import { toDateInputValue } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,13 +23,26 @@ export default async function EditGoalPage({
   if (!canWrite(user.role)) redirect("/dashboard/metas");
 
   const { id } = await params;
-  const [goal, users, costCenters] = await Promise.all([
-    prisma.goal.findFirst({ where: { id, deletedAt: null } }),
+  const [goal, users, costCenters, parents] = await Promise.all([
+    prisma.goal.findFirst({
+      where: { id, deletedAt: null },
+      include: { assignees: { select: { userId: true, isPrimary: true } } },
+    }),
     getUserOptions(),
     getCostCenterOptions(),
+    getGoalParentCandidates(id),
   ]);
 
   if (!goal) notFound();
+
+  const primary =
+    goal.assignees.find((a) => a.isPrimary)?.userId ?? goal.responsibleId ?? null;
+  const responsibleIds =
+    goal.assignees.length > 0
+      ? goal.assignees.map((a) => a.userId)
+      : goal.responsibleId
+        ? [goal.responsibleId]
+        : [];
 
   return (
     <>
@@ -46,22 +60,31 @@ export default async function EditGoalPage({
             action={updateGoal.bind(null, id)}
             users={users}
             costCenters={costCenters}
+            parents={parents}
             submitLabel="Salvar alterações"
             defaults={{
               title: goal.title,
               description: goal.description,
               type: goal.type,
               period: goal.period,
+              hierarchyLevel: goal.hierarchyLevel,
+              parentGoalId: goal.parentGoalId,
               month: goal.month,
               quarter: goal.quarter,
+              week: goal.week,
               year: goal.year,
               targetValue: goal.targetValue,
               currentValue: goal.currentValue,
               unit: goal.unit,
-              responsibleId: goal.responsibleId,
+              responsibleIds,
+              primaryResponsibleId: primary,
               costCenterId: goal.costCenterId,
+              area: goal.area,
               status: goal.status,
               calculationMode: goal.calculationMode,
+              includeInParentProgress: goal.includeInParentProgress,
+              startDate: toDateInputValue(goal.startDate),
+              endDate: toDateInputValue(goal.endDate),
             }}
           />
         </CardContent>

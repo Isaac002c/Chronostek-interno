@@ -348,9 +348,24 @@ export const GOAL_CALCULATION_MODE_LABELS: Record<string, string> = {
 };
 
 export const GOAL_PERIOD_LABELS: Record<string, string> = {
+  SEMANAL: "Semanal",
   MENSAL: "Mensal",
   TRIMESTRAL: "Trimestral",
   ANUAL: "Anual",
+};
+
+export const GOAL_LEVEL_LABELS: Record<string, string> = {
+  TRIMESTRAL: "Trimestral",
+  MENSAL: "Mensal",
+  SEMANAL: "Semanal",
+  AVULSA: "Avulsa",
+};
+
+export const GOAL_LEVEL_TONE: Record<string, BadgeTone> = {
+  TRIMESTRAL: "purple",
+  MENSAL: "info",
+  SEMANAL: "neutral",
+  AVULSA: "neutral",
 };
 
 export const GOAL_UNIT_LABELS: Record<string, string> = {
@@ -361,17 +376,46 @@ export const GOAL_UNIT_LABELS: Record<string, string> = {
 };
 
 export const GOAL_STATUS_LABELS: Record<string, string> = {
-  NO_PRAZO: "No Prazo",
-  EM_RISCO: "Em Risco",
+  NAO_INICIADA: "Não iniciada",
+  EM_ANDAMENTO: "Em andamento",
+  NO_PRAZO: "No prazo",
+  EM_RISCO: "Em risco",
   BATIDA: "Batida",
-  NAO_BATIDA: "Não Batida",
+  SUPERADA: "Superada",
+  ATRASADA: "Atrasada",
+  CANCELADA: "Cancelada",
+  NAO_BATIDA: "Não batida",
 };
 
 export const GOAL_STATUS_TONE: Record<string, BadgeTone> = {
+  NAO_INICIADA: "neutral",
+  EM_ANDAMENTO: "info",
   NO_PRAZO: "info",
   EM_RISCO: "warning",
   BATIDA: "success",
+  SUPERADA: "success",
+  ATRASADA: "danger",
+  CANCELADA: "neutral",
   NAO_BATIDA: "danger",
+};
+
+/** Rótulos das ações registradas no histórico de uma meta. */
+export const GOAL_ACTION_LABELS: Record<string, string> = {
+  CRIADA: "Meta criada",
+  ATUALIZADA: "Meta atualizada",
+  VINCULADA: "Vinculada a uma meta pai",
+  DESVINCULADA: "Desvinculada da meta pai",
+  RESP_ADICIONADO: "Responsável adicionado",
+  RESP_REMOVIDO: "Responsável removido",
+  ALVO_ALTERADO: "Valor alvo alterado",
+  ATUAL_ALTERADO: "Valor atual alterado",
+  STATUS_ALTERADO: "Status alterado",
+  BATIDA: "Meta batida",
+  SUPERADA: "Meta superada",
+  RECALCULADA: "Cálculo automático recalculado",
+  CANCELADA: "Meta cancelada",
+  REABERTA: "Meta reaberta",
+  EXCLUIDA: "Meta excluída",
 };
 
 // ───────────────────────── Tarefas ─────────────────────────
@@ -430,6 +474,7 @@ export const LEGAL_CONTRACT_STATUS_OPTIONS = toOptions(LEGAL_CONTRACT_STATUS_LAB
 export const LEGAL_DEADLINE_STATUS_OPTIONS = toOptions(LEGAL_DEADLINE_STATUS_LABELS);
 export const GOAL_TYPE_OPTIONS = toOptions(GOAL_TYPE_LABELS);
 export const GOAL_PERIOD_OPTIONS = toOptions(GOAL_PERIOD_LABELS);
+export const GOAL_LEVEL_OPTIONS = toOptions(GOAL_LEVEL_LABELS);
 export const GOAL_UNIT_OPTIONS = toOptions(GOAL_UNIT_LABELS);
 export const GOAL_STATUS_OPTIONS = toOptions(GOAL_STATUS_LABELS);
 export const PRIORITY_OPTIONS = toOptions(PRIORITY_LABELS);

@@ -362,9 +362,17 @@ enum GoalType {
 }
 
 enum GoalPeriod {
+  SEMANAL
   MENSAL
   TRIMESTRAL
   ANUAL
+}
+
+enum GoalLevel {
+  TRIMESTRAL
+  MENSAL
+  SEMANAL
+  AVULSA
 }
 
 enum GoalUnit {
@@ -375,9 +383,14 @@ enum GoalUnit {
 }
 
 enum GoalStatus {
+  NAO_INICIADA
+  EM_ANDAMENTO
   NO_PRAZO
   EM_RISCO
   BATIDA
+  SUPERADA
+  ATRASADA
+  CANCELADA
   NAO_BATIDA
 }
 
@@ -428,6 +441,7 @@ model User {
   legalDemands           LegalDemand[]     @relation("LegalDemandResponsible")
   legalRisks             LegalRisk[]       @relation("LegalRiskResponsible")
   goals                  Goal[]            @relation("GoalResponsible")
+  goalAssignments        GoalAssignee[]    @relation("GoalAssigneeUser")
   tasksAssigned          Task[]            @relation("TaskAssignee")
   tasksCreated           Task[]            @relation("TaskCreatedBy")
   budgetsApproved        Budget[]          @relation("BudgetApprover")
@@ -978,35 +992,63 @@ model LegalRisk {
 // ─────────────────────────────── METAS ───────────────────────────────
 
 model Goal {
-  id                 String              @id @default(cuid())
-  title              String
-  description        String?
-  type               GoalType
-  period             GoalPeriod
-  month              Int?
-  quarter            Int?
-  year               Int
-  targetValue        Float               @default(0)
-  currentValue       Float               @default(0)
-  progressPercentage Float               @default(0)
-  unit               GoalUnit            @default(REAIS)
-  calculationMode    GoalCalculationMode @default(MANUAL)
-  responsibleId      String?
-  costCenterId       String?
-  status             GoalStatus          @default(NO_PRAZO)
-  startDate          DateTime?
-  endDate            DateTime?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  deletedAt          DateTime?
+  id                      String              @id @default(cuid())
+  title                   String
+  description             String?
+  type                    GoalType
+  period                  GoalPeriod
+  hierarchyLevel          GoalLevel           @default(AVULSA)
+  parentGoalId            String?
+  month                   Int?
+  quarter                 Int?
+  week                    Int?
+  year                    Int
+  targetValue             Float               @default(0)
+  currentValue            Float               @default(0)
+  progressPercentage      Float               @default(0)
+  unit                    GoalUnit            @default(REAIS)
+  calculationMode         GoalCalculationMode @default(MANUAL)
+  includeInParentProgress Boolean             @default(true)
+  responsibleId           String?
+  costCenterId            String?
+  area                    String?
+  status                  GoalStatus          @default(NO_PRAZO)
+  startDate               DateTime?
+  endDate                 DateTime?
+  achievedAt              DateTime?
+  exceededAt              DateTime?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  deletedAt               DateTime?
 
-  responsible User?       @relation("GoalResponsible", fields: [responsibleId], references: [id])
-  costCenter  CostCenter? @relation(fields: [costCenterId], references: [id])
-  tasks       Task[]      @relation("GoalTasks")
+  responsible User?          @relation("GoalResponsible", fields: [responsibleId], references: [id])
+  costCenter  CostCenter?    @relation(fields: [costCenterId], references: [id])
+  parent      Goal?          @relation("GoalHierarchy", fields: [parentGoalId], references: [id])
+  children    Goal[]         @relation("GoalHierarchy")
+  assignees   GoalAssignee[]
+  tasks       Task[]         @relation("GoalTasks")
 
   @@index([type])
   @@index([year, month])
   @@index([costCenterId])
+  @@index([parentGoalId])
+  @@index([hierarchyLevel])
+  @@index([status])
+}
+
+model GoalAssignee {
+  id        String   @id @default(cuid())
+  goalId    String
+  userId    String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  user User @relation("GoalAssigneeUser", fields: [userId], references: [id])
+
+  @@unique([goalId, userId])
+  @@index([goalId])
+  @@index([userId])
 }
 
 // ─────────────────────────────── TAREFAS ───────────────────────────────

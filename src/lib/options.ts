@@ -59,6 +59,43 @@ export async function getContractOptions(): Promise<Option[]> {
   }));
 }
 
+export type GoalParentCandidate = {
+  value: string;
+  label: string;
+  level: string;
+  year: number;
+  month: number | null;
+  quarter: number | null;
+};
+
+/**
+ * Candidatos a meta PAI (níveis TRIMESTRAL e MENSAL não excluídos), com metadados
+ * para o formulário filtrar conforme o nível/ano/mês selecionados no cliente:
+ * - MENSAL → pai TRIMESTRAL do mesmo ano.
+ * - SEMANAL → pai MENSAL do mesmo ano e mês.
+ */
+export async function getGoalParentCandidates(
+  excludeId?: string,
+): Promise<GoalParentCandidate[]> {
+  const rows = await prisma.goal.findMany({
+    where: {
+      deletedAt: null,
+      hierarchyLevel: { in: ["TRIMESTRAL", "MENSAL"] },
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: { id: true, title: true, hierarchyLevel: true, year: true, month: true, quarter: true },
+    orderBy: [{ year: "desc" }, { quarter: "asc" }, { month: "asc" }],
+  });
+  return rows.map((r) => ({
+    value: r.id,
+    label: r.title,
+    level: r.hierarchyLevel,
+    year: r.year,
+    month: r.month,
+    quarter: r.quarter,
+  }));
+}
+
 export async function getLegalContractOptions(): Promise<Option[]> {
   const rows = await prisma.legalContract.findMany({
     where: { deletedAt: null },

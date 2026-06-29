@@ -4,7 +4,15 @@ import { Prisma, ContractStatus, ContractType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, monthLabel } from "@/lib/format";
+import {
+  resolvePeriod,
+  periodShortcuts,
+  recurringRevenueInPeriod,
+  totalRecurringRevenueInPeriod,
+  contractActiveInPeriod,
+  type Period,
+} from "@/lib/contracts";
 import {
   CONTRACT_STATUS_LABELS,
   CONTRACT_STATUS_TONE,
@@ -37,6 +45,12 @@ type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) =>
   Array.isArray(v) ? v[0] : (v ?? "");
 
+function periodLabel(p: Period): string {
+  const a = monthLabel(p.start.getUTCMonth() + 1, p.start.getUTCFullYear());
+  const b = monthLabel(p.end.getUTCMonth() + 1, p.end.getUTCFullYear());
+  return a === b ? a : `${a} a ${b}`;
+}
+
 export default async function ContratosPage({
   searchParams,
 }: {
@@ -47,6 +61,11 @@ export default async function ContratosPage({
   const status = one(sp.status);
   const type = one(sp.type);
   const q = one(sp.q);
+  const start = one(sp.start);
+  const end = one(sp.end);
+
+  const periodApplied = Boolean(start || end);
+  const period = resolvePeriod(start || undefined, end || undefined);
 
   const where: Prisma.ContractWhereInput = { deletedAt: null };
   if (status && status in ContractStatus)
@@ -54,12 +73,12 @@ export default async function ContratosPage({
   if (type && type in ContractType) where.type = type as ContractType;
   if (q) where.title = { contains: q, mode: "insensitive" };
 
-  const [contracts, mrrAgg] = await Promise.all([
+  const [allContracts, mrrAgg] = await Promise.all([
     prisma.contract.findMany({
       where,
       include: { client: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      take: 200,
     }),
     prisma.contract.aggregate({
       where: { deletedAt: null, status: "ATIVO", monthlyValue: { not: null } },
@@ -67,12 +86,36 @@ export default async function ContratosPage({
     }),
   ]);
 
+  // Quando há período, exibir apenas contratos ativos em ≥1 competência do intervalo.
+  const contracts = periodApplied
+    ? allContracts.filter((c) => contractActiveInPeriod(c, period))
+    : allContracts;
+
   const mrr = mrrAgg._sum.monthlyValue ?? 0;
+  const periodRevenue = totalRecurringRevenueInPeriod(contracts, period);
+  const contractsInPeriod = contracts.filter((c) =>
+    contractActiveInPeriod(c, period),
+  ).length;
   const writable = canWrite(user.role);
+
+  // Preserva os demais filtros ao trocar o período via atalhos.
+  const baseParams = new URLSearchParams();
+  if (q) baseParams.set("q", q);
+  if (type) baseParams.set("type", type);
+  if (status) baseParams.set("status", status);
+  const shortcutHref = (s: string, e: string) => {
+    const p = new URLSearchParams(baseParams);
+    p.set("start", s);
+    p.set("end", e);
+    return `/dashboard/comercial/contratos?${p.toString()}`;
+  };
 
   return (
     <>
-      <PageHeader title="Contratos" description="Contratos recorrentes e fechados, com MRR e ARR.">
+      <PageHeader
+        title="Contratos"
+        description="Receita recorrente por competência — MRR, ARR anualizado e receita do período."
+      >
         {writable && (
           <Button asChild>
             <Link href="/dashboard/comercial/contratos/new">
@@ -83,31 +126,51 @@ export default async function ContratosPage({
         )}
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="MRR (ativos)" value={formatCurrency(mrr)} tone="info" />
-        <StatCard label="ARR" value={formatCurrency(mrr * 12)} tone="info" />
-        <StatCard label="Contratos listados" value={contracts.length} />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="MRR (ativos)" value={formatCurrency(mrr)} tone="info" hint="Mensalidade recorrente dos contratos ativos agora." />
+        <StatCard label="ARR Anualizado" value={formatCurrency(mrr * 12)} tone="info" hint="MRR ativo × 12." />
+        <StatCard
+          label="Receita Recorrente no Período"
+          value={formatCurrency(periodRevenue)}
+          tone="success"
+          hint={periodLabel(period)}
+        />
+        <StatCard label="Contratos no Período" value={contractsInPeriod} hint={periodLabel(period)} />
       </div>
 
       <Card className="p-4">
         <form className="grid gap-3 md:grid-cols-12">
-          <div className="md:col-span-4">
+          <div className="md:col-span-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input name="q" placeholder="Buscar por título" defaultValue={q} className="pl-8" />
             </div>
           </div>
-          <div className="md:col-span-3">
+          <div className="md:col-span-2">
             <Select name="type" defaultValue={type} placeholder="Tipo" options={CONTRACT_TYPE_OPTIONS} />
           </div>
-          <div className="md:col-span-3">
+          <div className="md:col-span-2">
             <Select name="status" defaultValue={status} placeholder="Status" options={CONTRACT_STATUS_OPTIONS} />
           </div>
-          <div className="flex items-center gap-2 md:col-span-2">
+          <div className="md:col-span-2">
+            <Input type="date" name="start" defaultValue={start} aria-label="Período inicial" />
+          </div>
+          <div className="md:col-span-2">
+            <Input type="date" name="end" defaultValue={end} aria-label="Período final" />
+          </div>
+          <div className="flex items-center gap-2 md:col-span-1">
             <Button type="submit" size="sm">
               <Filter />
               Filtrar
             </Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 md:col-span-12">
+            <span className="text-xs text-muted-foreground">Atalhos:</span>
+            {periodShortcuts().map((s) => (
+              <Button key={s.key} asChild variant="outline" size="sm">
+                <Link href={shortcutHref(s.start, s.end)}>{s.label}</Link>
+              </Button>
+            ))}
             <Button asChild variant="ghost" size="sm">
               <Link href="/dashboard/comercial/contratos">Limpar</Link>
             </Button>
@@ -119,7 +182,7 @@ export default async function ContratosPage({
         <EmptyState
           icon={FileSignature}
           title="Nenhum contrato"
-          description="Cadastre o primeiro contrato."
+          description={periodApplied ? "Nenhum contrato ativo no período selecionado." : "Cadastre o primeiro contrato."}
           action={
             writable && (
               <Button asChild>
@@ -140,49 +203,55 @@ export default async function ContratosPage({
                 <TableHead>Cliente</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead className="text-right">Mensal</TableHead>
-                <TableHead className="text-right">ARR</TableHead>
+                <TableHead className="text-right">Receita no período</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-1 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {contracts.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>
-                    <span className="font-medium">{c.title}</span>
-                    {c.startDate && (
-                      <p className="text-xs text-muted-foreground">
-                        desde {formatDate(c.startDate)}
-                      </p>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm">{c.client.name}</TableCell>
-                  <TableCell className="text-sm">{CONTRACT_TYPE_LABELS[c.type]}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {c.monthlyValue ? formatCurrency(c.monthlyValue) : "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {c.monthlyValue ? formatCurrency(c.monthlyValue * 12) : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge value={c.status} labels={CONTRACT_STATUS_LABELS} tones={CONTRACT_STATUS_TONE} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      {writable && (
-                        <>
-                          <Button asChild variant="ghost" size="icon">
-                            <Link href={`/dashboard/comercial/contratos/${c.id}/edit`}>
-                              <Pencil />
-                            </Link>
-                          </Button>
-                          <DeleteButton action={deleteContract.bind(null, c.id)} iconOnly confirmMessage={`Excluir o contrato "${c.title}"?`} />
-                        </>
+              {contracts.map((c) => {
+                const isRecurring = c.type === "RECORRENTE" || c.type === "HIBRIDO";
+                const periodValue = isRecurring
+                  ? recurringRevenueInPeriod(c, period)
+                  : (c.totalValue ?? null);
+                return (
+                  <TableRow key={c.id}>
+                    <TableCell>
+                      <span className="font-medium">{c.title}</span>
+                      {c.startDate && (
+                        <p className="text-xs text-muted-foreground">
+                          desde {formatDate(c.startDate)}
+                        </p>
                       )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell className="text-sm">{c.client.name}</TableCell>
+                    <TableCell className="text-sm">{CONTRACT_TYPE_LABELS[c.type]}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {c.monthlyValue ? formatCurrency(c.monthlyValue) : "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {periodValue != null ? formatCurrency(periodValue) : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge value={c.status} labels={CONTRACT_STATUS_LABELS} tones={CONTRACT_STATUS_TONE} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        {writable && (
+                          <>
+                            <Button asChild variant="ghost" size="icon">
+                              <Link href={`/dashboard/comercial/contratos/${c.id}/edit`}>
+                                <Pencil />
+                              </Link>
+                            </Button>
+                            <DeleteButton action={deleteContract.bind(null, c.id)} iconOnly confirmMessage={`Excluir o contrato "${c.title}"?`} />
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
