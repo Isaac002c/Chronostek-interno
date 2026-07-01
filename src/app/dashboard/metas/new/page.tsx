@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
 import { getUserOptions, getCostCenterOptions, getGoalParentCandidates, getGoalIndicatorOptions } from "@/lib/options";
+import { nowSpParts } from "@/lib/tz";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,8 @@ export default async function NewGoalPage({ searchParams }: { searchParams: Prom
 
   const sp = await searchParams;
   const periodId = one(sp.period);
+  const levelParam = one(sp.level);
+  const VALID_LEVELS = ["ANUAL", "TRIMESTRAL", "MENSAL", "SEMANAL", "DIARIA", "AVULSA"];
 
   const [users, costCenters, parents, indicators, period] = await Promise.all([
     getUserOptions(),
@@ -53,7 +56,9 @@ export default async function NewGoalPage({ searchParams }: { searchParams: Prom
         week: period.week,
         planningPeriodId: period.id,
       }
-    : {};
+    : levelParam && VALID_LEVELS.includes(levelParam)
+      ? { hierarchyLevel: levelParam, year: nowSpParts().year }
+      : {};
 
   return (
     <>

@@ -1,147 +1,131 @@
 import Link from "next/link";
-import { Plus, Filter, Target, RefreshCw, Trophy, AlertTriangle, Clock, ListChecks, CalendarRange, Bell } from "lucide-react";
-import { Prisma, GoalType, GoalStatus } from "@prisma/client";
+import {
+  Plus, RefreshCw, Target, Trophy, Clock, ListChecks, CalendarRange,
+  ChevronRight, Bell, CalendarClock, UserX, Building2, CheckSquare, Flag,
+} from "lucide-react";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite, visibleGoalWhere } from "@/lib/rbac";
 import { getUserOptions, getCostCenterOptions } from "@/lib/options";
-import { goalAlerts } from "@/lib/goals";
-import { monthShort } from "@/lib/format";
-import { GOAL_TYPE_OPTIONS, GOAL_STATUS_OPTIONS } from "@/lib/enums";
+import { nowSpParts, spDayStart } from "@/lib/tz";
+import { formatDate, monthShort } from "@/lib/format";
+import { GOAL_STATUS_LABELS, GOAL_STATUS_TONE } from "@/lib/enums";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ActionButton } from "@/components/form/action-button";
 import { recalcAutomaticGoals } from "./actions";
-import { GoalTree, GoalFlatList, type GoalNode } from "./goal-tree";
-import { fmtGoalValue, goalPeriodLabel, responsiblesOf, statusMessage, achievedLabel, type GoalWithRefs } from "./goal-node";
+import { CreateYearForm } from "./periodos/create-year-form";
 
 export const dynamic = "force-dynamic";
 
-type SP = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
+const DONE = new Set(["BATIDA", "SUPERADA"]);
+const LATE = new Set(["ATRASADA", "NAO_BATIDA"]);
+const INACTIVE = new Set(["BATIDA", "SUPERADA", "CANCELADA", "ARQUIVADA"]);
+const OUT_OF_ROLLUP = new Set(["CANCELADA", "PAUSADA", "ARQUIVADA"]);
+const clamp = (n: number) => Math.min(100, Math.max(0, n));
+const avg = (arr: number[]) => (arr.length ? Math.round(arr.reduce((s, n) => s + clamp(n), 0) / arr.length) : 0);
 
-const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: monthShort(i + 1) }));
-const QUARTER_OPTIONS = [1, 2, 3, 4].map((q) => ({ value: String(q), label: `${q}º trimestre` }));
-
-const ALERT_TONE: Record<string, string> = {
-  ATRASADA: "text-red-600 dark:text-red-400",
-  EM_RISCO: "text-amber-600 dark:text-amber-400",
-  PRAZO_PROXIMO: "text-amber-600 dark:text-amber-400",
-  BATIDA: "text-emerald-600 dark:text-emerald-400",
-  SUPERADA: "text-emerald-600 dark:text-emerald-400",
+type GoalRow = {
+  id: string; title: string; status: string; progressPercentage: number;
+  year: number; quarter: number | null; month: number | null; hierarchyLevel: string;
+  endDate: Date | null; responsibleId: string | null; costCenterId: string | null;
+  assignees: { isPrimary: boolean; user: { name: string } }[];
 };
 
-export default async function MetasPage({ searchParams }: { searchParams: Promise<SP> }) {
-  const user = await requireModule("METAS");
-  const sp = await searchParams;
-  const fYear = one(sp.year);
-  const fQuarter = one(sp.quarter);
-  const fMonth = one(sp.month);
-  const fType = one(sp.type);
-  const fStatus = one(sp.status);
-  const fResp = one(sp.responsible);
-  const fCc = one(sp.costCenter);
+const QUICK_ACTIONS = [
+  { label: "Meta Anual", href: "/dashboard/metas/new?level=ANUAL" },
+  { label: "Meta Trimestral", href: "/dashboard/metas/new?level=TRIMESTRAL" },
+  { label: "Meta Mensal", href: "/dashboard/metas/new?level=MENSAL" },
+  { label: "Meta Semanal", href: "/dashboard/metas/new?level=SEMANAL" },
+  { label: "Meta Diária", href: "/dashboard/metas/new?level=DIARIA" },
+  { label: "Checklist", href: "/dashboard/tarefas/new" },
+];
 
-  const filters: Prisma.GoalWhereInput = { deletedAt: null };
-  if (fYear) filters.year = Number(fYear);
-  if (fQuarter) filters.quarter = Number(fQuarter);
-  if (fMonth) filters.month = Number(fMonth);
-  if (fType && fType in GoalType) filters.type = fType as GoalType;
-  if (fStatus && fStatus in GoalStatus) filters.status = fStatus as GoalStatus;
-  if (fCc) filters.costCenterId = fCc;
-  if (fResp) filters.OR = [{ responsibleId: fResp }, { assignees: { some: { userId: fResp } } }];
+export default async function MetasHomePage() {
+  const user = await requireModule("METAS");
+  const writable = canWrite(user.role);
+  const { year, month, day } = nowSpParts();
+  const quarter = Math.ceil(month / 3);
+  const todayStart = spDayStart(year, month, day);
+  const now = new Date();
 
   const vis = visibleGoalWhere(user.role, user.id);
-  const where: Prisma.GoalWhereInput = Object.keys(vis).length ? { AND: [filters, vis] } : filters;
+  const goalWhere: Prisma.GoalWhereInput = Object.keys(vis).length ? { AND: [{ deletedAt: null }, vis] } : { deletedAt: null };
 
-  const [goals, users, costCenters] = await Promise.all([
+  const [goals, years, users, costCenters, checklistsPendentes, tarefasVencidas] = await Promise.all([
     prisma.goal.findMany({
-      where,
-      include: {
+      where: goalWhere,
+      select: {
+        id: true, title: true, status: true, progressPercentage: true, year: true, quarter: true, month: true,
+        hierarchyLevel: true, endDate: true, responsibleId: true, costCenterId: true,
         assignees: { select: { isPrimary: true, user: { select: { name: true } } } },
-        responsible: { select: { name: true } },
       },
-      orderBy: [{ year: "desc" }, { quarter: "asc" }, { month: "asc" }, { week: "asc" }, { createdAt: "desc" }],
-      take: 500,
+      orderBy: [{ year: "desc" }, { createdAt: "desc" }],
+      take: 2000,
     }),
+    prisma.planningPeriod.findMany({ where: { type: "ANUAL" }, orderBy: { year: "desc" }, include: { _count: { select: { goals: true } } } }),
     getUserOptions(),
     getCostCenterOptions(),
+    prisma.task.count({ where: { deletedAt: null, status: { notIn: ["CONCLUIDA", "CANCELADA"] }, OR: [{ goalId: { not: null } }, { module: "METAS" }] } }),
+    prisma.task.count({ where: { deletedAt: null, status: { notIn: ["CONCLUIDA", "CANCELADA"] }, dueDate: { lt: todayStart } } }),
   ]);
 
-  const byId = new Map(goals.map((g) => [g.id, g as GoalWithRefs]));
-  const childrenOf = new Map<string, GoalWithRefs[]>();
-  for (const g of goals) {
-    if (!g.parentGoalId) continue;
-    const arr = childrenOf.get(g.parentGoalId) ?? [];
-    arr.push(g as GoalWithRefs);
-    childrenOf.set(g.parentGoalId, arr);
-  }
+  const g = goals as GoalRow[];
+  const userName = new Map(users.map((u) => [u.value, u.label]));
+  const ccName = new Map(costCenters.map((c) => [c.value, c.label]));
 
-  function toNode(g: GoalWithRefs, visited = new Set<string>(), withChildren = true): GoalNode {
-    visited.add(g.id);
-    const kids = withChildren ? (childrenOf.get(g.id) ?? []).filter((k) => !visited.has(k.id)) : [];
-    const childNodes = kids.map((k) => toNode(k, visited, true));
-    const doneKids = kids.filter((k) => k.status === "BATIDA" || k.status === "SUPERADA").length;
-    return {
-      id: g.id,
-      title: g.title,
-      level: g.hierarchyLevel,
-      status: g.status,
-      periodLabel: goalPeriodLabel(g),
-      currentLabel: fmtGoalValue(g.currentValue, g.unit),
-      targetLabel: fmtGoalValue(g.targetValue, g.unit),
-      progress: g.targetValue > 0 ? (g.currentValue / g.targetValue) * 100 : 0,
-      responsibles: responsiblesOf(g),
-      parentTitle: g.parentGoalId ? (byId.get(g.parentGoalId)?.title ?? null) : null,
-      achievedLabel: achievedLabel(g),
-      message: statusMessage(g),
-      childrenSummary: kids.length > 0 ? `${doneKids} de ${kids.length} metas filhas batidas` : null,
-      children: childNodes,
-    };
-  }
+  // Indicadores
+  const total = g.length;
+  const ativas = g.filter((x) => !INACTIVE.has(x.status)).length;
+  const andamento = g.filter((x) => x.status === "EM_ANDAMENTO").length;
+  const concluidas = g.filter((x) => DONE.has(x.status)).length;
+  const atrasadas = g.filter((x) => LATE.has(x.status)).length;
+  const semResp = g.filter((x) => x.assignees.length === 0 && !x.responsibleId && !INACTIVE.has(x.status)).length;
+  const semCc = g.filter((x) => !x.costCenterId && !INACTIVE.has(x.status)).length;
 
-  const strategicRoots = goals.filter((g) => g.hierarchyLevel === "ANUAL" || g.hierarchyLevel === "TRIMESTRAL");
-  // Só raízes (sem pai visível) para não duplicar as que já aparecem aninhadas.
-  const rootStrategic = strategicRoots.filter((g) => !g.parentGoalId || !byId.has(g.parentGoalId));
-  const strategicNodes = rootStrategic.map((g) => toNode(byId.get(g.id)!));
+  const inScope = (x: GoalRow) => !OUT_OF_ROLLUP.has(x.status);
+  const progAno = avg(g.filter((x) => x.year === year && inScope(x)).map((x) => x.progressPercentage));
+  const progTri = avg(g.filter((x) => x.year === year && x.quarter === quarter && inScope(x)).map((x) => x.progressPercentage));
+  const progMes = avg(g.filter((x) => x.year === year && x.month === month && inScope(x)).map((x) => x.progressPercentage));
 
-  const individualGoals = goals.filter((g) => g.hierarchyLevel === "MENSAL" || g.hierarchyLevel === "SEMANAL" || g.hierarchyLevel === "DIARIA");
-  const groups = new Map<string, GoalNode[]>();
-  for (const g of individualGoals) {
-    const resp = responsiblesOf(byId.get(g.id)!)[0] ?? "Sem responsável";
-    const node = toNode(byId.get(g.id)!, new Set(), false);
-    const arr = groups.get(resp) ?? [];
-    arr.push(node);
-    groups.set(resp, arr);
-  }
+  const primaryOf = (x: GoalRow) =>
+    x.assignees.find((a) => a.isPrimary)?.user.name ??
+    x.assignees[0]?.user.name ??
+    (x.responsibleId ? userName.get(x.responsibleId) ?? "—" : "Sem responsável");
 
-  const avulsas = goals.filter((g) => g.hierarchyLevel === "AVULSA");
-  const avulsaNodes = avulsas.map((g) => toNode(byId.get(g.id)!, new Set(), false));
+  const byGroup = (keyFn: (x: GoalRow) => string) => {
+    const m = new Map<string, { count: number; progresses: number[] }>();
+    for (const x of g) {
+      if (INACTIVE.has(x.status)) continue;
+      const k = keyFn(x);
+      const e = m.get(k) ?? { count: 0, progresses: [] };
+      e.count += 1; e.progresses.push(x.progressPercentage);
+      m.set(k, e);
+    }
+    return [...m.entries()].map(([k, v]) => ({ k, count: v.count, avg: avg(v.progresses) })).sort((a, b) => b.count - a.count);
+  };
 
-  const total = goals.length;
-  const batidas = goals.filter((g) => g.status === "BATIDA" || g.status === "SUPERADA").length;
-  const emRisco = goals.filter((g) => g.status === "EM_RISCO").length;
-  const atrasadas = goals.filter((g) => g.status === "ATRASADA" || g.status === "NAO_BATIDA").length;
-  const overall = total > 0 ? Math.round(goals.reduce((s, g) => s + Math.min(100, Math.max(0, g.progressPercentage)), 0) / total) : 0;
-  const mainTri = [...rootStrategic].sort((a, b) => b.targetValue - a.targetValue)[0];
+  const porResp = byGroup(primaryOf).slice(0, 6);
+  const porCc = byGroup((x) => (x.costCenterId ? ccName.get(x.costCenterId) ?? "—" : "Sem centro de custo")).slice(0, 6);
+  const porStatus = byGroup((x) => x.status);
 
-  const alerts = goalAlerts(goals).filter((a) => a.kind !== "BATIDA").slice(0, 8);
-  const writable = canWrite(user.role);
+  const proximosPrazos = g
+    .filter((x) => x.endDate && !INACTIVE.has(x.status) && x.endDate >= now)
+    .sort((a, b) => a.endDate!.getTime() - b.endDate!.getTime())
+    .slice(0, 6);
+
+  const alertas = g
+    .filter((x) => LATE.has(x.status) || x.status === "EM_RISCO" || (x.endDate && x.endDate >= now && (x.endDate.getTime() - now.getTime()) / 86400000 <= 5 && clamp(x.progressPercentage) < 100 && !INACTIVE.has(x.status)))
+    .slice(0, 8);
 
   return (
     <>
-      <PageHeader title="Metas" description="Visão geral estratégica — hierarquia anual → trimestral → mensal → semanal, com progresso automático.">
-        <Button asChild variant="outline">
-          <Link href="/dashboard/metas/periodos">
-            <CalendarRange />
-            Planejamento
-          </Link>
-        </Button>
+      <PageHeader title="Metas" description="Dashboard e navegação por período — abra um ano como uma pasta para chegar até o dia.">
         {writable && (
           <>
             <ActionButton action={recalcAutomaticGoals} successMessage="Metas recalculadas." variant="outline">
@@ -158,113 +142,145 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
         )}
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Metas totais" value={total} icon={Target} />
-        <StatCard label="Batidas / superadas" value={batidas} tone="success" icon={Trophy} />
-        <StatCard label="Em risco" value={emRisco} tone="warning" icon={AlertTriangle} />
-        <StatCard label="Atrasadas" value={atrasadas} tone="danger" icon={Clock} />
-        <StatCard label="Conclusão geral" value={`${overall}%`} icon={ListChecks} hint={mainTri ? `Principal: ${mainTri.title}` : undefined} />
-      </div>
-
-      {alerts.length > 0 && (
-        <Card className="p-4">
-          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-            <Bell className="size-4" />
-            Alertas
-          </h2>
-          <ul className="grid gap-1.5 sm:grid-cols-2">
-            {alerts.map((a) => (
-              <li key={a.goalId + a.kind} className="text-sm">
-                <Link href={`/dashboard/metas/${a.goalId}`} className="hover:underline">
-                  <span className={ALERT_TONE[a.kind] ?? ""}>●</span> <span className="font-medium">{a.title}</span>
-                  <span className="text-muted-foreground"> — {a.message}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
+      {/* Ações rápidas */}
+      {writable && (
+        <div className="flex flex-wrap gap-2">
+          {QUICK_ACTIONS.map((a) => (
+            <Button key={a.href} asChild variant="outline" size="sm">
+              <Link href={a.href}><Plus className="size-3.5" />{a.label}</Link>
+            </Button>
+          ))}
+          <Button asChild variant="ghost" size="sm"><Link href={`/dashboard/metas/relatorios?responsible=${user.id}`}>Minhas metas</Link></Button>
+          <Button asChild variant="ghost" size="sm"><Link href="/dashboard/metas/relatorios?status=ATRASADA">Metas atrasadas</Link></Button>
+        </div>
       )}
 
-      <Card className="p-4">
-        <form className="grid gap-3 md:grid-cols-12">
-          <div className="md:col-span-2">
-            <Input name="year" type="number" min="2000" max="2100" placeholder="Ano" defaultValue={fYear} />
-          </div>
-          <div className="md:col-span-2">
-            <Select name="quarter" defaultValue={fQuarter} placeholder="Trimestre" options={QUARTER_OPTIONS} />
-          </div>
-          <div className="md:col-span-2">
-            <Select name="month" defaultValue={fMonth} placeholder="Mês" options={MONTH_OPTIONS} />
-          </div>
-          <div className="md:col-span-2">
-            <Select name="type" defaultValue={fType} placeholder="Tipo" options={GOAL_TYPE_OPTIONS} />
-          </div>
-          <div className="md:col-span-2">
-            <Select name="status" defaultValue={fStatus} placeholder="Status" options={GOAL_STATUS_OPTIONS} />
-          </div>
-          <div className="md:col-span-2">
-            <Select name="responsible" defaultValue={fResp} placeholder="Responsável" options={users} />
-          </div>
-          <div className="md:col-span-3">
-            <Select name="costCenter" defaultValue={fCc} placeholder="Centro de custo / Área" options={costCenters} />
-          </div>
-          <div className="flex items-center gap-2 md:col-span-3">
-            <Button type="submit" size="sm">
-              <Filter />
-              Filtrar
-            </Button>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/dashboard/metas">Limpar</Link>
-            </Button>
-          </div>
-        </form>
-      </Card>
+      {/* Progresso do período atual */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <ProgressCard label={`Progresso do ano (${year})`} pct={progAno} />
+        <ProgressCard label={`Progresso do trimestre (T${quarter})`} pct={progTri} />
+        <ProgressCard label={`Progresso do mês (${monthShort(month)})`} pct={progMes} />
+      </div>
 
-      {total === 0 ? (
-        <EmptyState
-          icon={Target}
-          title="Nenhuma meta"
-          description="Comece criando a estrutura anual em Planejamento, ou defina uma meta avulsa."
-          action={
-            writable && (
-              <Button asChild>
-                <Link href="/dashboard/metas/new">
-                  <Plus />
-                  Nova meta
-                </Link>
-              </Button>
-            )
-          }
-        />
-      ) : (
-        <div className="space-y-8">
-          {strategicNodes.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-muted-foreground">Metas estratégicas</h2>
-              <GoalTree nodes={strategicNodes} />
-            </section>
+      {/* Indicadores */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Metas ativas" value={ativas} icon={Target} hint={`${total} no total`} />
+        <StatCard label="Em andamento" value={andamento} tone="info" icon={Flag} />
+        <StatCard label="Concluídas" value={concluidas} tone="success" icon={Trophy} />
+        <StatCard label="Atrasadas" value={atrasadas} tone={atrasadas > 0 ? "danger" : "default"} icon={Clock} />
+        <StatCard label="Sem responsável" value={semResp} tone={semResp > 0 ? "warning" : "default"} icon={UserX} />
+        <StatCard label="Sem centro de custo" value={semCc} tone={semCc > 0 ? "warning" : "default"} icon={Building2} />
+        <StatCard label="Checklists pendentes" value={checklistsPendentes} icon={ListChecks} />
+        <StatCard label="Tarefas vencidas" value={tarefasVencidas} tone={tarefasVencidas > 0 ? "danger" : "default"} icon={CheckSquare} />
+      </div>
+
+      {/* Alertas + próximos prazos */}
+      {(alertas.length > 0 || proximosPrazos.length > 0) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {alertas.length > 0 && (
+            <Card className="p-4">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground"><Bell className="size-4" />Alertas</h2>
+              <ul className="space-y-1.5">
+                {alertas.map((a) => (
+                  <li key={a.id} className="text-sm">
+                    <Link href={`/dashboard/metas/${a.id}`} className="hover:underline">
+                      <span className={LATE.has(a.status) ? "text-red-500" : "text-amber-500"}>●</span> <span className="font-medium">{a.title}</span>
+                      <span className="text-muted-foreground"> — {GOAL_STATUS_LABELS[a.status] ?? a.status} · {Math.round(clamp(a.progressPercentage))}%</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
           )}
-
-          {groups.size > 0 && (
-            <section className="space-y-4">
-              <h2 className="text-sm font-semibold text-muted-foreground">Metas individuais</h2>
-              {[...groups.entries()].map(([resp, nodes]) => (
-                <div key={resp} className="space-y-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{resp}</p>
-                  <GoalFlatList nodes={nodes} />
-                </div>
-              ))}
-            </section>
-          )}
-
-          {avulsaNodes.length > 0 && (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold text-muted-foreground">Metas avulsas</h2>
-              <GoalFlatList nodes={avulsaNodes} />
-            </section>
+          {proximosPrazos.length > 0 && (
+            <Card className="p-4">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground"><CalendarClock className="size-4" />Próximos prazos</h2>
+              <ul className="space-y-1.5">
+                {proximosPrazos.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between text-sm">
+                    <Link href={`/dashboard/metas/${p.id}`} className="truncate hover:underline">{p.title}</Link>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatDate(p.endDate)}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
           )}
         </div>
       )}
+
+      {/* Pastas de anos — navegação principal */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-muted-foreground"><CalendarRange className="size-4" />Anos</h2>
+          {writable && <CreateYearForm defaultYear={year} />}
+        </div>
+        {years.length === 0 ? (
+          <EmptyState icon={CalendarRange} title="Nenhum ano criado" description="Crie o primeiro ano de planejamento para navegar Ano → Trimestre → Mês → Semana → Dia." />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {years.map((y) => (
+              <Link key={y.id} href={`/dashboard/metas/periodos/${y.id}`} className="group rounded-xl border bg-card p-5 transition-colors hover:border-primary/50">
+                <div className="flex items-center justify-between">
+                  <span className="text-3xl font-semibold tracking-tight group-hover:text-primary">{y.year}</span>
+                  <span className="grid size-11 place-items-center rounded-lg bg-primary/10 text-primary"><CalendarRange className="size-5" /></span>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
+                  <span className="inline-flex items-center gap-1"><Target className="size-4" />{y._count.goals} meta(s)</span>
+                  <span className="inline-flex items-center gap-1 font-medium text-primary">Abrir<ChevronRight className="size-4" /></span>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Quebras: responsável / centro de custo / status */}
+      {total > 0 && (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <BreakdownCard title="Por responsável" rows={porResp} />
+          <BreakdownCard title="Por centro de custo" rows={porCc} />
+          <BreakdownCard title="Por status" rows={porStatus} isStatus />
+        </div>
+      )}
     </>
+  );
+}
+
+function ProgressCard({ label, pct }: { label: string; pct: number }) {
+  return (
+    <Card className="p-5">
+      <p className="text-sm font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight">{pct}%</p>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
+      </div>
+    </Card>
+  );
+}
+
+function BreakdownCard({ title, rows, isStatus = false }: { title: string; rows: { k: string; count: number; avg: number }[]; isStatus?: boolean }) {
+  return (
+    <Card className="p-4">
+      <h2 className="mb-2 text-sm font-semibold text-muted-foreground">{title}</h2>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">—</p>
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((r) => (
+            <li key={r.k} className="text-sm">
+              <div className="flex items-center justify-between">
+                <span className="truncate">{isStatus ? (GOAL_STATUS_LABELS[r.k] ?? r.k) : r.k}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">{r.count} · {r.avg}%</span>
+              </div>
+              {isStatus ? (
+                <div className="mt-1"><StatusBadge value={r.k} labels={GOAL_STATUS_LABELS} tones={GOAL_STATUS_TONE} /></div>
+              ) : (
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-sky-500" style={{ width: `${r.avg}%` }} /></div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
