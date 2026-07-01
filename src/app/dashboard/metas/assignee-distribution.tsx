@@ -37,7 +37,7 @@ export function AssigneeDistribution({
       <Field
         label="Divisão entre responsáveis"
         htmlFor="distributionType"
-        hint="Compartilhada = todos respondem pelo total (sem dividir). Valor fixo/percentual pedem o valor por pessoa. Nunca duplica o total da meta."
+        hint="Sem ninguém marcado, a meta herda os responsáveis da meta-pai. Compartilhada = todos respondem pelo total (sem dividir); valor fixo/percentual pedem o valor por pessoa. Nunca duplica o total da meta."
       >
         <Select id="distributionType" name="distributionType" value={type} onChange={(e) => setType(e.target.value)} options={GOAL_DISTRIBUTION_OPTIONS} />
       </Field>

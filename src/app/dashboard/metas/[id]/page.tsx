@@ -4,7 +4,8 @@ import { ArrowLeft, Pencil, History, ListChecks, Users } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
-import { getUserOptions } from "@/lib/options";
+import { getUserOptions, getCostCenterOptions } from "@/lib/options";
+import { loadGoalAncestry, effectiveResponsibles, effectiveCostCenter } from "@/lib/goals";
 import { formatDate, formatDateTime } from "@/lib/format";
 import {
   GOAL_STATUS_LABELS,
@@ -51,7 +52,7 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
 
   if (!goal) notFound();
 
-  const [history, checklistTasks, users] = await Promise.all([
+  const [history, checklistTasks, users, costCenters, ancestry] = await Promise.all([
     prisma.auditLog.findMany({
       where: { entity: "Goal", entityId: id },
       include: { user: { select: { name: true } } },
@@ -65,6 +66,8 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
       take: 200,
     }),
     getUserOptions(),
+    getCostCenterOptions(),
+    loadGoalAncestry([id]),
   ]);
 
   const writable = canWrite(user.role);
@@ -73,12 +76,11 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
   const clamped = Math.min(100, Math.max(0, goal.progressPercentage));
   const remaining = Math.max(0, goal.targetValue - goal.currentValue);
 
-  const responsibles =
-    goal.assignees.length > 0
-      ? [...goal.assignees].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)).map((a) => a.user.name)
-      : goal.responsible
-        ? [goal.responsible.name]
-        : [];
+  // Responsáveis e centro de custo EFETIVOS (próprios ou herdados da meta-pai).
+  const effResp = effectiveResponsibles(id, ancestry);
+  const effCc = effectiveCostCenter(id, ancestry);
+  const ccName = new Map(costCenters.map((c) => [c.value, c.label]));
+  const responsibles = [...effResp.assignees].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)).map((a) => a.name);
 
   // Progresso realizado por responsável (a partir dos checklists da meta).
   const realizedByUser = new Map<string, number>();
@@ -142,7 +144,12 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
               <span className="text-sm text-muted-foreground">{goalPeriodLabel(goal)}</span>
             )}
             {goal.area && <span className="text-sm text-muted-foreground">· {goal.area}</span>}
-            {goal.costCenter && <span className="text-sm text-muted-foreground">· {goal.costCenter.code} {goal.costCenter.name}</span>}
+            {effCc.costCenterId && (
+              <span className="text-sm text-muted-foreground">
+                · {ccName.get(effCc.costCenterId) ?? "Centro de custo"}
+                {effCc.inherited && effCc.inheritedFromTitle ? ` (herdado de ${effCc.inheritedFromTitle})` : ""}
+              </span>
+            )}
           </div>
 
           <div>
@@ -169,7 +176,12 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
           <div className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <p className="text-xs text-muted-foreground">Responsáveis</p>
-              <p>{responsibles.length > 0 ? responsibles.join(", ") : "—"}</p>
+              <p>
+                {responsibles.length > 0 ? responsibles.join(", ") : "—"}
+                {effResp.inherited && effResp.inheritedFromTitle && (
+                  <span className="ml-1 text-xs text-muted-foreground">(herdado de {effResp.inheritedFromTitle})</span>
+                )}
+              </p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Cálculo</p>

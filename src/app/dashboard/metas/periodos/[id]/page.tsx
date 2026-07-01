@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
 import { getGoalOptions, getUserOptions } from "@/lib/options";
+import { loadGoalAncestry, effectiveResponsibles } from "@/lib/goals";
 import { getPlanningPeriod, getPlanningBreadcrumb, getWeekDays } from "@/lib/planning";
 import { spDayStart, spDayEnd } from "@/lib/tz";
 import { formatDate } from "@/lib/format";
@@ -60,6 +61,9 @@ export default async function PeriodPage({
     include: goalInclude,
     orderBy: [{ targetValue: "desc" }, { createdAt: "desc" }],
   })) as GoalWithRefs[];
+
+  // Herança de responsáveis (efetivos) para os cards deste período.
+  const goalAncestry = periodGoals.length > 0 ? await loadGoalAncestry(periodGoals.map((x) => x.id)) : new Map();
 
   // Buckets de progresso por período-filho (considerando toda a subárvore).
   const yearPeriods = await prisma.planningPeriod.findMany({
@@ -323,7 +327,13 @@ export default async function PeriodPage({
             )}
           </Card>
         ) : (
-          <GoalFlatList nodes={periodGoals.map((g) => flatGoalNode(g))} />
+          <GoalFlatList
+            nodes={periodGoals.map((g) => {
+              const eff = effectiveResponsibles(g.id, goalAncestry);
+              const names = [...eff.assignees].sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)).map((a) => a.name);
+              return flatGoalNode(g, null, { names, inherited: eff.inherited });
+            })}
+          />
         )}
       </section>
     </>

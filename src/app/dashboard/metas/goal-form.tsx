@@ -180,8 +180,8 @@ export function GoalForm({
           <Input id="endDate" name="endDate" type="date" defaultValue={defaults.endDate ?? ""} />
         </Field>
 
-        <Field label="Centro de custo / Área" htmlFor="costCenterId" error={fe.costCenterId}>
-          <Select id="costCenterId" name="costCenterId" defaultValue={defaults.costCenterId ?? ""} placeholder="—" options={costCenters} />
+        <Field label="Centro de custo / Área" htmlFor="costCenterId" error={fe.costCenterId} hint="Deixe em branco para herdar o centro de custo da meta-pai.">
+          <Select id="costCenterId" name="costCenterId" defaultValue={defaults.costCenterId ?? ""} placeholder="— Herdar do pai —" options={costCenters} />
         </Field>
         <Field label="Indicador personalizado" htmlFor="goalIndicatorId" error={fe.goalIndicatorId} hint="Opcional; indicadores criados em Configurações.">
           <Select id="goalIndicatorId" name="goalIndicatorId" defaultValue={defaults.goalIndicatorId ?? ""} placeholder="— Nenhum —" options={indicators} />

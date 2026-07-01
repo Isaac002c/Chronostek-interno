@@ -274,7 +274,7 @@ async function autoSplitGoal(
         type: parent.type, period: "MENSAL", hierarchyLevel: "MENSAL", parentGoalId: parent.id,
         planningPeriodId: monthPeriod?.id ?? null, month: m, quarter: parent.quarter, year: parent.year,
         targetValue: targets[i], currentValue: 0, progressPercentage: 0, unit: parent.unit, calculationMode: "MANUAL",
-        includeInParentProgress: true, responsibleId: parent.responsibleId, costCenterId: parent.costCenterId,
+        includeInParentProgress: true, responsibleId: null, costCenterId: null,
         area: parent.area, status: "NAO_INICIADA", startDate: mr.start, endDate: mr.end,
       });
     }
@@ -289,8 +289,8 @@ async function autoSplitGoal(
         type: parent.type, period: "SEMANAL", hierarchyLevel: "SEMANAL", parentGoalId: parent.id,
         planningPeriodId: weekPeriod?.id ?? null, month: parent.month, quarter: parent.quarter ?? Math.ceil(parent.month / 3),
         week: w.week, year: parent.year, targetValue: targets[i], currentValue: 0, progressPercentage: 0, unit: parent.unit,
-        calculationMode: "MANUAL", includeInParentProgress: true, responsibleId: parent.responsibleId,
-        costCenterId: parent.costCenterId, area: parent.area, status: "NAO_INICIADA",
+        calculationMode: "MANUAL", includeInParentProgress: true, responsibleId: null,
+        costCenterId: null, area: parent.area, status: "NAO_INICIADA",
         startDate: spDayStart(parent.year, parent.month, w.startDay), endDate: spDayEnd(parent.year, parent.month, w.endDay),
       });
     }

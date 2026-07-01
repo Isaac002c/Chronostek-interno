@@ -63,7 +63,11 @@ export function achievedLabel(g: Goal): string | null {
 }
 
 /** Card simples (sem árvore de filhas) — usado em listas por período/responsável. */
-export function flatGoalNode(g: GoalWithRefs, parentTitle: string | null = null): GoalNode {
+export function flatGoalNode(
+  g: GoalWithRefs,
+  parentTitle: string | null = null,
+  effective?: { names: string[]; inherited: boolean },
+): GoalNode {
   return {
     id: g.id,
     title: g.title,
@@ -73,7 +77,8 @@ export function flatGoalNode(g: GoalWithRefs, parentTitle: string | null = null)
     currentLabel: fmtGoalValue(g.currentValue, g.unit),
     targetLabel: fmtGoalValue(g.targetValue, g.unit),
     progress: g.targetValue > 0 ? (g.currentValue / g.targetValue) * 100 : 0,
-    responsibles: responsiblesOf(g),
+    responsibles: effective ? effective.names : responsiblesOf(g),
+    inheritedResp: effective?.inherited ?? false,
     parentTitle,
     achievedLabel: achievedLabel(g),
     message: statusMessage(g),

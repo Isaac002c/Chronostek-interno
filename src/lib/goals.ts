@@ -7,12 +7,55 @@ import {
   equalSplit,
   distributeAssignees,
   sumChecklistContributions,
+  effectiveResponsibles,
+  effectiveCostCenter,
   type AssigneeDistInput,
+  type GoalLite,
+  type EffectiveResponsibles,
+  type EffectiveCostCenter,
 } from "@/lib/goal-math";
 
 // Reexporta as funções puras (definidas em goal-math.ts) mantendo os imports existentes.
-export { goalStatusFor, computeGoalStatus, equalSplit, distributeAssignees, sumChecklistContributions };
-export type { AssigneeDistInput };
+export { goalStatusFor, computeGoalStatus, equalSplit, distributeAssignees, sumChecklistContributions, effectiveResponsibles, effectiveCostCenter };
+export type { AssigneeDistInput, GoalLite, EffectiveResponsibles, EffectiveCostCenter };
+
+/**
+ * Carrega uma meta e TODOS os seus ancestrais (cadeia de meta-pai) num Map, para
+ * resolver herança de responsável/CC em memória sem N+1. Normaliza responsáveis:
+ * usa `assignees`; se vazios mas houver `responsibleId` legado, sintetiza a entrada.
+ */
+export async function loadGoalAncestry(seedIds: string[]): Promise<Map<string, GoalLite>> {
+  const map = new Map<string, GoalLite>();
+  let frontier = [...new Set(seedIds)].filter(Boolean);
+  let guard = 0;
+  while (frontier.length > 0 && guard++ < 15) {
+    const rows = await prisma.goal.findMany({
+      where: { id: { in: frontier } },
+      select: {
+        id: true,
+        parentGoalId: true,
+        title: true,
+        responsibleId: true,
+        costCenterId: true,
+        responsible: { select: { name: true } },
+        assignees: { select: { userId: true, isPrimary: true, user: { select: { name: true } } } },
+      },
+    });
+    const next: string[] = [];
+    for (const r of rows) {
+      const assignees =
+        r.assignees.length > 0
+          ? r.assignees.map((a) => ({ userId: a.userId, isPrimary: a.isPrimary, name: a.user.name }))
+          : r.responsibleId
+            ? [{ userId: r.responsibleId, isPrimary: true, name: r.responsible?.name ?? "—" }]
+            : [];
+      map.set(r.id, { id: r.id, parentGoalId: r.parentGoalId, title: r.title, responsibleId: r.responsibleId, costCenterId: r.costCenterId, assignees });
+      if (r.parentGoalId && !map.has(r.parentGoalId)) next.push(r.parentGoalId);
+    }
+    frontier = [...new Set(next)].filter((id) => !map.has(id));
+  }
+  return map;
+}
 
 function months(period: GoalPeriod, month: number | null, quarter: number | null): number[] {
   if ((period === "SEMANAL" || period === "MENSAL" || period === "DIARIA") && month) return [month];

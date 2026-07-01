@@ -7,6 +7,9 @@ import {
   equalSplit,
   distributeAssignees,
   sumChecklistContributions,
+  effectiveResponsibles,
+  effectiveCostCenter,
+  type GoalLite,
 } from "../src/lib/goal-math";
 import {
   spDayStart,
@@ -116,6 +119,25 @@ console.log("Calendário (semanas reais) e timezone SP:");
   eq(spDayStart(2026, 7, 1).toISOString(), "2026-07-01T03:00:00.000Z", "00:00 SP = 03:00 UTC");
   eq(spDayEnd(2026, 7, 1).toISOString(), "2026-07-02T02:59:59.999Z", "23:59:59.999 SP = 02:59 UTC do dia seguinte");
   eq(spKeyOf(spDayEnd(2026, 7, 1)), "2026-07-01", "fim do dia ainda pertence ao mesmo dia SP (sem drift)");
+}
+
+console.log("Herança de responsáveis / centro de custo (pai→filho, override):");
+{
+  const map = new Map<string, GoalLite>([
+    ["ano", { id: "ano", parentGoalId: null, title: "Meta Anual 2027", responsibleId: null, costCenterId: "cc-1", assignees: [{ userId: "u1", isPrimary: true, name: "Isaac" }] }],
+    ["tri", { id: "tri", parentGoalId: "ano", title: "Trimestre 1", responsibleId: null, costCenterId: null, assignees: [] }],
+    ["mes", { id: "mes", parentGoalId: "tri", title: "Janeiro", responsibleId: null, costCenterId: "cc-2", assignees: [{ userId: "u2", isPrimary: true, name: "Arthur" }] }],
+  ]);
+  const rAno = effectiveResponsibles("ano", map);
+  eq([rAno.assignees.map((a) => a.name), rAno.inherited], [["Isaac"], false], "ano usa próprio responsável");
+  const rTri = effectiveResponsibles("tri", map);
+  eq([rTri.assignees.map((a) => a.name), rTri.inherited, rTri.inheritedFromTitle], [["Isaac"], true, "Meta Anual 2027"], "trimestre herda responsável do ano");
+  const rMes = effectiveResponsibles("mes", map);
+  eq([rMes.assignees.map((a) => a.name), rMes.inherited], [["Arthur"], false], "mês sobrescreve responsável");
+  const cTri = effectiveCostCenter("tri", map);
+  eq([cTri.costCenterId, cTri.inherited], ["cc-1", true], "trimestre herda centro de custo do ano");
+  const cMes = effectiveCostCenter("mes", map);
+  eq([cMes.costCenterId, cMes.inherited], ["cc-2", false], "mês sobrescreve centro de custo");
 }
 
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam.`);

@@ -91,6 +91,76 @@ export function distributeAssignees(total: number, list: AssigneeDistInput[]): n
   });
 }
 
+// ─────────────────────────── Herança (responsável / centro de custo) ───────────────────────────
+
+/** Representação leve de uma meta para resolver herança em memória. */
+export type GoalLite = {
+  id: string;
+  parentGoalId: string | null;
+  title: string;
+  responsibleId: string | null;
+  costCenterId: string | null;
+  assignees: { userId: string; isPrimary: boolean; name: string }[];
+};
+
+export type EffectiveResponsibles = {
+  assignees: { userId: string; isPrimary: boolean; name: string }[];
+  inherited: boolean;
+  inheritedFromId: string | null;
+  inheritedFromTitle: string | null;
+};
+
+export type EffectiveCostCenter = {
+  costCenterId: string | null;
+  inherited: boolean;
+  inheritedFromId: string | null;
+  inheritedFromTitle: string | null;
+};
+
+/**
+ * Responsáveis EFETIVOS de uma meta: os próprios, se existirem; senão herda
+ * subindo a cadeia de meta-pai até encontrar. Puro (sem IO); `byId` traz a meta
+ * e seus ancestrais. Não altera dados — herança só ocorre quando o filho está vazio.
+ */
+export function effectiveResponsibles(goalId: string, byId: Map<string, GoalLite>): EffectiveResponsibles {
+  let id: string | null = goalId;
+  let guard = 0;
+  while (id && guard++ < 12) {
+    const node: GoalLite | undefined = byId.get(id);
+    if (!node) break;
+    if (node.assignees.length > 0) {
+      return {
+        assignees: node.assignees,
+        inherited: id !== goalId,
+        inheritedFromId: id !== goalId ? node.id : null,
+        inheritedFromTitle: id !== goalId ? node.title : null,
+      };
+    }
+    id = node.parentGoalId;
+  }
+  return { assignees: [], inherited: false, inheritedFromId: null, inheritedFromTitle: null };
+}
+
+/** Centro de custo EFETIVO: o próprio, se houver; senão herda da meta-pai mais próxima. */
+export function effectiveCostCenter(goalId: string, byId: Map<string, GoalLite>): EffectiveCostCenter {
+  let id: string | null = goalId;
+  let guard = 0;
+  while (id && guard++ < 12) {
+    const node: GoalLite | undefined = byId.get(id);
+    if (!node) break;
+    if (node.costCenterId) {
+      return {
+        costCenterId: node.costCenterId,
+        inherited: id !== goalId,
+        inheritedFromId: id !== goalId ? node.id : null,
+        inheritedFromTitle: id !== goalId ? node.title : null,
+      };
+    }
+    id = node.parentGoalId;
+  }
+  return { costCenterId: null, inherited: false, inheritedFromId: null, inheritedFromTitle: null };
+}
+
 /**
  * Soma pura das contribuições realizadas para uma meta, sem duplicidade:
  * - contribuição primária: tarefas cujo `goalId` é a própria meta (realizedContribution);

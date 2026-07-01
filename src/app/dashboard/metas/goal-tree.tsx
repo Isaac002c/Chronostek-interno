@@ -21,6 +21,7 @@ export type GoalNode = {
   targetLabel: string;
   progress: number;
   responsibles: string[];
+  inheritedResp?: boolean;
   parentTitle?: string | null;
   achievedLabel?: string | null;
   message?: string | null;
@@ -114,7 +115,10 @@ export function GoalCard({
             <div className={`h-full rounded-full ${barColor(node.status)}`} style={{ width: `${clamped}%` }} />
           </div>
           <div className="mt-1 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">{node.responsibles.length > 0 ? node.responsibles.join(", ") : "Sem responsável"}</span>
+            <span className="text-muted-foreground">
+              {node.responsibles.length > 0 ? node.responsibles.join(", ") : "Sem responsável"}
+              {node.inheritedResp && node.responsibles.length > 0 && <span className="italic"> · herdado</span>}
+            </span>
             <span className="font-medium text-muted-foreground">{Math.round(node.progress)}%</span>
           </div>
         </div>
