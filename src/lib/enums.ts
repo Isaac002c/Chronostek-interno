@@ -446,6 +446,8 @@ export const GOAL_STATUS_LABELS: Record<string, string> = {
   ATRASADA: "Atrasada",
   CANCELADA: "Cancelada",
   NAO_BATIDA: "Não batida",
+  PAUSADA: "Pausada",
+  ARQUIVADA: "Arquivada",
 };
 
 export const GOAL_STATUS_TONE: Record<string, BadgeTone> = {
@@ -458,6 +460,8 @@ export const GOAL_STATUS_TONE: Record<string, BadgeTone> = {
   ATRASADA: "danger",
   CANCELADA: "neutral",
   NAO_BATIDA: "danger",
+  PAUSADA: "warning",
+  ARQUIVADA: "neutral",
 };
 
 /** Rótulos das ações registradas no histórico de uma meta. */

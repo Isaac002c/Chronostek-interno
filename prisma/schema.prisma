@@ -434,6 +434,8 @@ enum GoalStatus {
   ATRASADA
   CANCELADA
   NAO_BATIDA
+  PAUSADA
+  ARQUIVADA
 }
 
 enum GoalCalculationMode {

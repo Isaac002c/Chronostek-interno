@@ -265,9 +265,11 @@ async function applyGoalComputation(
 ): Promise<void> {
   const { start, end } = goalDateRange(g);
   const isAuto = g.calculationMode === "AUTOMATICO" || g.calculationMode === "CHECKLIST";
+  // Status "congelados": definidos manualmente e nunca sobrescritos pelo cálculo.
+  const FROZEN = new Set<string>(["CANCELADA", "PAUSADA", "ARQUIVADA"]);
   let status: GoalStatus;
-  if (g.status === "CANCELADA") {
-    status = "CANCELADA";
+  if (FROZEN.has(g.status)) {
+    status = g.status;
   } else if (isAggregated || isAuto) {
     status = computeGoalStatus(g.targetValue, current, start, end, now, false);
   } else {
@@ -400,6 +402,7 @@ export function goalAlerts(goals: Goal[], now: Date = new Date()): GoalAlert[] {
   const alerts: GoalAlert[] = [];
   const MS_DAY = 24 * 3600 * 1000;
   for (const g of goals) {
+    if (g.status === "CANCELADA" || g.status === "PAUSADA" || g.status === "ARQUIVADA") continue;
     if (g.status === "ATRASADA" || g.status === "NAO_BATIDA") {
       const p = goalPace(g, now);
       alerts.push({ goalId: g.id, title: g.title, kind: "ATRASADA", message: p.daysLate > 0 ? `Atrasada há ${p.daysLate} dia(s)` : "Prazo encerrado sem atingir" });
