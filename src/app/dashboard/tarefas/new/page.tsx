@@ -3,27 +3,43 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
-import { getUserOptions, getCostCenterOptions } from "@/lib/options";
+import { getUserOptions, getCostCenterOptions, getGoalOptions } from "@/lib/options";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { TaskForm } from "../task-form";
+import { TaskForm, type TaskDefaults } from "../task-form";
 import { createTask } from "../actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewTaskPage() {
+type SP = Record<string, string | string[] | undefined>;
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v ?? ""));
+
+export default async function NewTaskPage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireModule("TAREFAS");
   if (!canWrite(user.role)) redirect("/dashboard/tarefas");
 
-  const [users, costCenters] = await Promise.all([
+  const sp = await searchParams;
+  const goalId = one(sp.goal);
+  const due = one(sp.due);
+  const periodId = one(sp.period);
+
+  const [users, costCenters, goals] = await Promise.all([
     getUserOptions(),
     getCostCenterOptions(),
+    getGoalOptions(),
   ]);
+
+  const defaults: TaskDefaults = {
+    goalId: goalId || null,
+    dueDate: due || undefined,
+    planningPeriodId: periodId || null,
+    module: goalId ? "METAS" : "GERAL",
+  };
 
   return (
     <>
-      <PageHeader title="Nova tarefa" description="Crie uma tarefa para a equipe.">
+      <PageHeader title="Nova tarefa" description="Crie uma tarefa ou checklist. Vincule a uma meta para alimentar o progresso.">
         <Button asChild variant="ghost">
           <Link href="/dashboard/tarefas">
             <ArrowLeft />
@@ -33,7 +49,7 @@ export default async function NewTaskPage() {
       </PageHeader>
       <Card>
         <CardContent className="pt-6">
-          <TaskForm action={createTask} users={users} costCenters={costCenters} />
+          <TaskForm action={createTask} users={users} costCenters={costCenters} goals={goals} defaults={defaults} />
         </CardContent>
       </Card>
     </>

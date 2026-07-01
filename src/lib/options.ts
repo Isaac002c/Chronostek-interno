@@ -80,7 +80,7 @@ export async function getGoalParentCandidates(
   const rows = await prisma.goal.findMany({
     where: {
       deletedAt: null,
-      hierarchyLevel: { in: ["TRIMESTRAL", "MENSAL"] },
+      hierarchyLevel: { in: ["ANUAL", "TRIMESTRAL", "MENSAL", "SEMANAL"] },
       ...(excludeId ? { id: { not: excludeId } } : {}),
     },
     select: { id: true, title: true, hierarchyLevel: true, year: true, month: true, quarter: true },
@@ -94,6 +94,34 @@ export async function getGoalParentCandidates(
     month: r.month,
     quarter: r.quarter,
   }));
+}
+
+/** Metas selecionáveis para vincular a uma tarefa/checklist (com nível no rótulo). */
+export async function getGoalOptions(): Promise<Option[]> {
+  const rows = await prisma.goal.findMany({
+    where: { deletedAt: null, status: { not: "CANCELADA" } },
+    select: { id: true, title: true, hierarchyLevel: true, year: true },
+    orderBy: [{ year: "desc" }, { createdAt: "desc" }],
+    take: 500,
+  });
+  const levelShort: Record<string, string> = {
+    ANUAL: "Anual",
+    TRIMESTRAL: "Trim.",
+    MENSAL: "Mensal",
+    SEMANAL: "Semanal",
+    DIARIA: "Diária",
+    AVULSA: "Avulsa",
+  };
+  return rows.map((r) => ({ value: r.id, label: `${r.title} · ${levelShort[r.hierarchyLevel] ?? r.hierarchyLevel}` }));
+}
+
+export async function getGoalIndicatorOptions(): Promise<Option[]> {
+  const rows = await prisma.goalIndicator.findMany({
+    where: { active: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((r) => ({ value: r.id, label: r.name }));
 }
 
 export async function getLegalContractOptions(): Promise<Option[]> {

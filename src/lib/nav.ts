@@ -101,6 +101,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/dashboard/metas",
     icon: Target,
     module: "METAS",
+    children: [
+      { label: "Visão geral", href: "/dashboard/metas" },
+      { label: "Planejamento", href: "/dashboard/metas/periodos" },
+      { label: "Checklists", href: "/dashboard/metas/checklists" },
+      { label: "Relatórios", href: "/dashboard/metas/relatorios" },
+    ],
   },
   {
     label: "Tarefas",
@@ -116,6 +122,7 @@ export const NAV_ITEMS: NavItem[] = [
     children: [
       { label: "Usuários", href: "/dashboard/configuracoes/usuarios" },
       { label: "Centros de Custo", href: "/dashboard/configuracoes/centros-custo" },
+      { label: "Indicadores de Meta", href: "/dashboard/configuracoes/indicadores" },
       { label: "Aprovações", href: "/dashboard/configuracoes/aprovacoes" },
     ],
   },

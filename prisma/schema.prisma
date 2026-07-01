@@ -366,6 +366,7 @@ enum GoalPeriod {
   MENSAL
   TRIMESTRAL
   ANUAL
+  DIARIA
 }
 
 enum GoalLevel {
@@ -373,6 +374,47 @@ enum GoalLevel {
   MENSAL
   SEMANAL
   AVULSA
+  ANUAL
+  DIARIA
+}
+
+// ───────── Planejamento (hierarquia de períodos) ─────────
+
+enum PlanningPeriodType {
+  ANUAL
+  TRIMESTRAL
+  MENSAL
+  SEMANAL
+  DIARIO
+}
+
+enum PlanningPeriodStatus {
+  PLANEJADO
+  ATIVO
+  CONCLUIDO
+  ENCERRADO
+  CANCELADO
+}
+
+/** Unidade de contribuição de um checklist/tarefa para uma meta. */
+enum ContributionUnit {
+  PERCENTUAL
+  QUANTIDADE
+  REAIS
+  LEADS
+  REUNIOES
+  PROPOSTAS
+  CLIENTES
+  HORAS
+  OUTRO
+}
+
+/** Como uma meta é dividida entre responsáveis (sem duplicidade de contabilização). */
+enum GoalDistributionType {
+  VALOR_FIXO
+  PERCENTUAL
+  COMPARTILHADA
+  IGUALITARIA
 }
 
 enum GoalUnit {
@@ -397,6 +439,7 @@ enum GoalStatus {
 enum GoalCalculationMode {
   AUTOMATICO
   MANUAL
+  CHECKLIST
 }
 
 enum Priority {
@@ -442,6 +485,7 @@ model User {
   legalRisks             LegalRisk[]       @relation("LegalRiskResponsible")
   goals                  Goal[]            @relation("GoalResponsible")
   goalAssignments        GoalAssignee[]    @relation("GoalAssigneeUser")
+  planningPeriodsCreated PlanningPeriod[]  @relation("PlanningPeriodCreatedBy")
   tasksAssigned          Task[]            @relation("TaskAssignee")
   tasksCreated           Task[]            @relation("TaskCreatedBy")
   budgetsApproved        Budget[]          @relation("BudgetApprover")
@@ -478,6 +522,7 @@ model CostCenter {
   campaigns           MarketingCampaign[]
   proposals           Proposal[]
   goals               Goal[]
+  goalIndicators      GoalIndicator[]     @relation("IndicatorCostCenter")
   tasks               Task[]
   budgets             Budget[]
   budgetLines         BudgetLine[]
@@ -999,6 +1044,8 @@ model Goal {
   period                  GoalPeriod
   hierarchyLevel          GoalLevel           @default(AVULSA)
   parentGoalId            String?
+  planningPeriodId        String?
+  goalIndicatorId         String?
   month                   Int?
   quarter                 Int?
   week                    Int?
@@ -1021,27 +1068,36 @@ model Goal {
   updatedAt               DateTime            @updatedAt
   deletedAt               DateTime?
 
-  responsible User?          @relation("GoalResponsible", fields: [responsibleId], references: [id])
-  costCenter  CostCenter?    @relation(fields: [costCenterId], references: [id])
-  parent      Goal?          @relation("GoalHierarchy", fields: [parentGoalId], references: [id])
-  children    Goal[]         @relation("GoalHierarchy")
-  assignees   GoalAssignee[]
-  tasks       Task[]         @relation("GoalTasks")
+  responsible    User?              @relation("GoalResponsible", fields: [responsibleId], references: [id])
+  costCenter     CostCenter?        @relation(fields: [costCenterId], references: [id])
+  parent         Goal?              @relation("GoalHierarchy", fields: [parentGoalId], references: [id])
+  children       Goal[]             @relation("GoalHierarchy")
+  planningPeriod PlanningPeriod?    @relation(fields: [planningPeriodId], references: [id])
+  indicator      GoalIndicator?     @relation(fields: [goalIndicatorId], references: [id])
+  assignees      GoalAssignee[]
+  contributions  GoalContribution[] @relation("GoalContributions")
+  tasks          Task[]             @relation("GoalTasks")
 
   @@index([type])
   @@index([year, month])
   @@index([costCenterId])
   @@index([parentGoalId])
+  @@index([planningPeriodId])
   @@index([hierarchyLevel])
   @@index([status])
 }
 
 model GoalAssignee {
-  id        String   @id @default(cuid())
-  goalId    String
-  userId    String
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id               String               @id @default(cuid())
+  goalId           String
+  userId           String
+  isPrimary        Boolean              @default(false)
+  distributionType GoalDistributionType @default(COMPARTILHADA)
+  plannedValue     Float?
+  realizedValue    Float?
+  percentage       Float?
+  note             String?
+  createdAt        DateTime             @default(now())
 
   goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
   user User @relation("GoalAssigneeUser", fields: [userId], references: [id])
@@ -1049,6 +1105,102 @@ model GoalAssignee {
   @@unique([goalId, userId])
   @@index([goalId])
   @@index([userId])
+}
+
+/**
+ * Contribuição explícita de uma tarefa/checklist para uma meta.
+ * Usada para o caso em que uma tarefa alimenta MAIS DE UMA meta sem duplicidade
+ * (a meta primária da tarefa é representada por Task.goalId + campos de contribuição).
+ */
+model GoalContribution {
+  id            String           @id @default(cuid())
+  taskId        String
+  goalId        String
+  unit          ContributionUnit @default(QUANTIDADE)
+  plannedValue  Float            @default(0)
+  realizedValue Float            @default(0)
+  weight        Float?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  goal Goal @relation("GoalContributions", fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, goalId])
+  @@index([goalId])
+  @@index([taskId])
+}
+
+/**
+ * Indicador personalizado de meta (admin): nome, unidade, fórmula, ícone, categoria.
+ * Permite metas além dos tipos nativos (GoalType).
+ */
+model GoalIndicator {
+  id                  String           @id @default(cuid())
+  name                String
+  unit                ContributionUnit @default(QUANTIDADE)
+  customUnit          String?
+  category            String?
+  icon                String?
+  formula             String?
+  calculationType     String?
+  defaultCostCenterId String?
+  active              Boolean          @default(true)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  costCenter CostCenter? @relation("IndicatorCostCenter", fields: [defaultCostCenterId], references: [id])
+  goals      Goal[]
+
+  @@index([active])
+}
+
+// ─────────────────────────────── PLANEJAMENTO ───────────────────────────────
+
+/**
+ * Nó da hierarquia de planejamento: Ano → Trimestre → Mês → Semana (→ Dia opcional).
+ * startDate/endDate são calculados no fuso America/Sao_Paulo e armazenados como instantes UTC.
+ * Semanas são reais do calendário (alinhadas à segunda-feira), recortadas ao mês.
+ */
+model PlanningPeriod {
+  id           String               @id @default(cuid())
+  name         String
+  type         PlanningPeriodType
+  year         Int
+  quarter      Int?
+  month        Int?
+  week         Int?
+  date         DateTime?
+  startDate    DateTime
+  endDate      DateTime
+  isWorkingDay Boolean              @default(true)
+  status       PlanningPeriodStatus @default(PLANEJADO)
+  parentId     String?
+  createdById  String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  parent    PlanningPeriod?  @relation("PlanningPeriodHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children  PlanningPeriod[] @relation("PlanningPeriodHierarchy")
+  createdBy User?            @relation("PlanningPeriodCreatedBy", fields: [createdById], references: [id])
+  goals     Goal[]
+  tasks     Task[]
+
+  @@index([type])
+  @@index([year])
+  @@index([parentId])
+  @@index([startDate, endDate])
+}
+
+/** Feriado / dia não útil (nacional cadastrado ou marcação manual). */
+model Holiday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  name      String
+  national  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([date])
 }
 
 // ─────────────────────────────── TAREFAS ───────────────────────────────
@@ -1076,6 +1228,15 @@ model Task {
   updatedAt      DateTime   @updatedAt
   deletedAt      DateTime?
 
+  // Checklist / contribuição para meta (alimenta o progresso da meta vinculada)
+  planningPeriodId    String?
+  contributionUnit    ContributionUnit?
+  plannedContribution Float?
+  realizedContribution Float?
+  contributionWeight  Float?
+  evidenceUrl         String?
+  evidenceNote        String?
+
   // Vínculos polimórficos opcionais
   leadId           String?
   clientId         String?
@@ -1089,12 +1250,14 @@ model Task {
   assignee       User?              @relation("TaskAssignee", fields: [assigneeId], references: [id])
   createdBy      User?              @relation("TaskCreatedBy", fields: [createdById], references: [id])
   costCenter     CostCenter?        @relation(fields: [costCenterId], references: [id])
+  planningPeriod PlanningPeriod?    @relation(fields: [planningPeriodId], references: [id])
   lead           Lead?              @relation("LeadTasks", fields: [leadId], references: [id])
   client         Client?            @relation("ClientTasks", fields: [clientId], references: [id])
   contract       Contract?          @relation("ContractTasks", fields: [contractId], references: [id])
   project        Project?           @relation("ProjectTasks", fields: [projectId], references: [id])
   campaign       MarketingCampaign? @relation("CampaignTasks", fields: [campaignId], references: [id])
   goal           Goal?              @relation("GoalTasks", fields: [goalId], references: [id])
+  goalContributions GoalContribution[]
   legalContract  LegalContract?     @relation("LegalTasks", fields: [legalContractId], references: [id])
   financialEntry FinancialEntry?    @relation("FinancialTasks", fields: [financialEntryId], references: [id])
 
@@ -1104,6 +1267,8 @@ model Task {
   @@index([dueDate])
   @@index([module])
   @@index([costCenterId])
+  @@index([planningPeriodId])
+  @@index([goalId])
 }
 
 // ─────────────────────────────── AUDITORIA ───────────────────────────────

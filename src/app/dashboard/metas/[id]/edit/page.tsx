@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
-import { getUserOptions, getCostCenterOptions, getGoalParentCandidates } from "@/lib/options";
+import { getUserOptions, getCostCenterOptions, getGoalParentCandidates, getGoalIndicatorOptions } from "@/lib/options";
 import { toDateInputValue } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,26 +23,27 @@ export default async function EditGoalPage({
   if (!canWrite(user.role)) redirect("/dashboard/metas");
 
   const { id } = await params;
-  const [goal, users, costCenters, parents] = await Promise.all([
+  const [goal, users, costCenters, parents, indicators] = await Promise.all([
     prisma.goal.findFirst({
       where: { id, deletedAt: null },
-      include: { assignees: { select: { userId: true, isPrimary: true } } },
+      include: { assignees: { select: { userId: true, isPrimary: true, distributionType: true, plannedValue: true, percentage: true } } },
     }),
     getUserOptions(),
     getCostCenterOptions(),
     getGoalParentCandidates(id),
+    getGoalIndicatorOptions(),
   ]);
 
   if (!goal) notFound();
 
-  const primary =
-    goal.assignees.find((a) => a.isPrimary)?.userId ?? goal.responsibleId ?? null;
+  const primary = goal.assignees.find((a) => a.isPrimary)?.userId ?? goal.responsibleId ?? null;
   const responsibleIds =
-    goal.assignees.length > 0
-      ? goal.assignees.map((a) => a.userId)
-      : goal.responsibleId
-        ? [goal.responsibleId]
-        : [];
+    goal.assignees.length > 0 ? goal.assignees.map((a) => a.userId) : goal.responsibleId ? [goal.responsibleId] : [];
+  const distributionType = goal.assignees.find((a) => a.isPrimary)?.distributionType ?? goal.assignees[0]?.distributionType ?? "COMPARTILHADA";
+  const distributionValues: Record<string, number | null> = {};
+  for (const a of goal.assignees) {
+    distributionValues[a.userId] = distributionType === "VALOR_FIXO" ? a.plannedValue : distributionType === "PERCENTUAL" ? a.percentage : null;
+  }
 
   return (
     <>
@@ -60,6 +61,7 @@ export default async function EditGoalPage({
             action={updateGoal.bind(null, id)}
             users={users}
             costCenters={costCenters}
+            indicators={indicators}
             parents={parents}
             submitLabel="Salvar alterações"
             defaults={{
@@ -69,6 +71,8 @@ export default async function EditGoalPage({
               period: goal.period,
               hierarchyLevel: goal.hierarchyLevel,
               parentGoalId: goal.parentGoalId,
+              planningPeriodId: goal.planningPeriodId,
+              goalIndicatorId: goal.goalIndicatorId,
               month: goal.month,
               quarter: goal.quarter,
               week: goal.week,
@@ -78,6 +82,8 @@ export default async function EditGoalPage({
               unit: goal.unit,
               responsibleIds,
               primaryResponsibleId: primary,
+              distributionType,
+              distributionValues,
               costCenterId: goal.costCenterId,
               area: goal.area,
               status: goal.status,

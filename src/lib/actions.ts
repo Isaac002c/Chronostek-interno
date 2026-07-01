@@ -40,11 +40,15 @@ export function optStr(fd: FormData, key: string): string | null {
 export function optNum(fd: FormData, key: string): number | null {
   const s = str(fd, key);
   if (s === "") return null;
-  const n = Number(s.replace(/\./g, "").replace(",", "."));
+  // Se houver vírgula, é formato pt-BR ("1.234,56"): ponto = milhar, vírgula = decimal.
+  // Sem vírgula, é o formato de <input type="number"> ("1234.56" ou "1234"): ponto = decimal.
+  const n = s.includes(",")
+    ? Number(s.replace(/\./g, "").replace(",", "."))
+    : Number(s);
   return Number.isFinite(n) ? n : null;
 }
 
-/** Aceita tanto "1234.56" quanto "1.234,56". */
+/** Aceita tanto "1234.56" (input number) quanto "1.234,56" (pt-BR). */
 export function num(fd: FormData, key: string, fallback = 0): number {
   return optNum(fd, key) ?? fallback;
 }

@@ -2,7 +2,7 @@
 // Mantido simples e declarativo: cada role enxerga um conjunto de módulos.
 // VIEWER tem acesso de leitura a tudo; escrita é negada.
 
-import type { Role } from "@prisma/client";
+import type { Role, Prisma } from "@prisma/client";
 
 export type NavModule =
   | "DASHBOARD"
@@ -60,6 +60,28 @@ export function canAccessModule(role: Role, module: NavModule): boolean {
 /** BDR só enxerga os próprios leads/tarefas. */
 export function isRestrictedToOwn(role: Role): boolean {
   return role === "BDR";
+}
+
+/** Só admin cria/edita/encerra metas estratégicas globais (anuais/trimestrais). */
+export function canManageStrategicGoals(role: Role): boolean {
+  return isAdmin(role);
+}
+
+/**
+ * Filtro de visibilidade de metas por papel (validado no backend).
+ * - Admin e VIEWER: veem todas (VIEWER só leitura).
+ * - Demais papéis: metas em que participam (responsável/assignee) + metas
+ *   estratégicas globais (anuais/trimestrais). Sem vazamento entre pessoas.
+ */
+export function visibleGoalWhere(role: Role, userId: string): Prisma.GoalWhereInput {
+  if (isAdmin(role) || role === "VIEWER") return {};
+  return {
+    OR: [
+      { responsibleId: userId },
+      { assignees: { some: { userId } } },
+      { hierarchyLevel: { in: ["ANUAL", "TRIMESTRAL"] } },
+    ],
+  };
 }
 
 /** Lança um erro padrão de acesso negado (usado em server actions/loaders). */

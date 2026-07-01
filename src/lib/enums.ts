@@ -345,9 +345,11 @@ export const GOAL_AUTOMATIC_TYPES = [
 export const GOAL_CALCULATION_MODE_LABELS: Record<string, string> = {
   AUTOMATICO: "Automático",
   MANUAL: "Manual",
+  CHECKLIST: "Por checklist",
 };
 
 export const GOAL_PERIOD_LABELS: Record<string, string> = {
+  DIARIA: "Diária",
   SEMANAL: "Semanal",
   MENSAL: "Mensal",
   TRIMESTRAL: "Trimestral",
@@ -355,17 +357,76 @@ export const GOAL_PERIOD_LABELS: Record<string, string> = {
 };
 
 export const GOAL_LEVEL_LABELS: Record<string, string> = {
+  ANUAL: "Anual",
   TRIMESTRAL: "Trimestral",
   MENSAL: "Mensal",
   SEMANAL: "Semanal",
+  DIARIA: "Diária",
   AVULSA: "Avulsa",
 };
 
 export const GOAL_LEVEL_TONE: Record<string, BadgeTone> = {
+  ANUAL: "purple",
   TRIMESTRAL: "purple",
   MENSAL: "info",
   SEMANAL: "neutral",
+  DIARIA: "neutral",
   AVULSA: "neutral",
+};
+
+// ── Planejamento (hierarquia de períodos) ──
+
+export const PLANNING_PERIOD_TYPE_LABELS: Record<string, string> = {
+  ANUAL: "Ano",
+  TRIMESTRAL: "Trimestre",
+  MENSAL: "Mês",
+  SEMANAL: "Semana",
+  DIARIO: "Dia",
+};
+
+export const PLANNING_PERIOD_TYPE_TONE: Record<string, BadgeTone> = {
+  ANUAL: "purple",
+  TRIMESTRAL: "info",
+  MENSAL: "info",
+  SEMANAL: "neutral",
+  DIARIO: "neutral",
+};
+
+export const PLANNING_PERIOD_STATUS_LABELS: Record<string, string> = {
+  PLANEJADO: "Planejado",
+  ATIVO: "Ativo",
+  CONCLUIDO: "Concluído",
+  ENCERRADO: "Encerrado",
+  CANCELADO: "Cancelado",
+};
+
+export const PLANNING_PERIOD_STATUS_TONE: Record<string, BadgeTone> = {
+  PLANEJADO: "neutral",
+  ATIVO: "success",
+  CONCLUIDO: "info",
+  ENCERRADO: "neutral",
+  CANCELADO: "danger",
+};
+
+// ── Contribuição de checklist / distribuição ──
+
+export const CONTRIBUTION_UNIT_LABELS: Record<string, string> = {
+  PERCENTUAL: "Percentual (%)",
+  QUANTIDADE: "Quantidade",
+  REAIS: "Valor (R$)",
+  LEADS: "Leads",
+  REUNIOES: "Reuniões",
+  PROPOSTAS: "Propostas",
+  CLIENTES: "Clientes",
+  HORAS: "Horas",
+  OUTRO: "Outra",
+};
+
+export const GOAL_DISTRIBUTION_LABELS: Record<string, string> = {
+  VALOR_FIXO: "Valor fixo por pessoa",
+  PERCENTUAL: "Percentual de participação",
+  COMPARTILHADA: "Compartilhada (sem divisão)",
+  IGUALITARIA: "Distribuída igualmente",
 };
 
 export const GOAL_UNIT_LABELS: Record<string, string> = {
@@ -413,6 +474,9 @@ export const GOAL_ACTION_LABELS: Record<string, string> = {
   BATIDA: "Meta batida",
   SUPERADA: "Meta superada",
   RECALCULADA: "Cálculo automático recalculado",
+  CHECKLIST_CONCLUIDO: "Checklist concluído",
+  CHECKLIST_REABERTO: "Checklist reaberto",
+  FILHAS_GERADAS: "Metas-filhas geradas",
   CANCELADA: "Meta cancelada",
   REABERTA: "Meta reaberta",
   EXCLUIDA: "Meta excluída",
@@ -477,6 +541,10 @@ export const GOAL_PERIOD_OPTIONS = toOptions(GOAL_PERIOD_LABELS);
 export const GOAL_LEVEL_OPTIONS = toOptions(GOAL_LEVEL_LABELS);
 export const GOAL_UNIT_OPTIONS = toOptions(GOAL_UNIT_LABELS);
 export const GOAL_STATUS_OPTIONS = toOptions(GOAL_STATUS_LABELS);
+export const GOAL_CALCULATION_MODE_OPTIONS = toOptions(GOAL_CALCULATION_MODE_LABELS);
+export const CONTRIBUTION_UNIT_OPTIONS = toOptions(CONTRIBUTION_UNIT_LABELS);
+export const GOAL_DISTRIBUTION_OPTIONS = toOptions(GOAL_DISTRIBUTION_LABELS);
+export const PLANNING_PERIOD_STATUS_OPTIONS = toOptions(PLANNING_PERIOD_STATUS_LABELS);
 export const PRIORITY_OPTIONS = toOptions(PRIORITY_LABELS);
 export const TASK_STATUS_OPTIONS = toOptions(TASK_STATUS_LABELS);
 export const MODULE_OPTIONS = toOptions(MODULE_LABELS);

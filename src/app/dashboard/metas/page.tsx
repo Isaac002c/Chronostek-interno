@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Plus, Filter, Target, RefreshCw, Trophy, AlertTriangle, Clock, ListChecks } from "lucide-react";
-import { Prisma, GoalType, GoalStatus, type Goal } from "@prisma/client";
+import { Plus, Filter, Target, RefreshCw, Trophy, AlertTriangle, Clock, ListChecks, CalendarRange, Bell } from "lucide-react";
+import { Prisma, GoalType, GoalStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canWrite, visibleGoalWhere } from "@/lib/rbac";
 import { getUserOptions, getCostCenterOptions } from "@/lib/options";
-import { goalPace } from "@/lib/goals";
-import { formatCurrency, formatNumber, formatDate, monthShort } from "@/lib/format";
+import { goalAlerts } from "@/lib/goals";
+import { monthShort } from "@/lib/format";
 import { GOAL_TYPE_OPTIONS, GOAL_STATUS_OPTIONS } from "@/lib/enums";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ActionButton } from "@/components/form/action-button";
 import { recalcAutomaticGoals } from "./actions";
 import { GoalTree, GoalFlatList, type GoalNode } from "./goal-tree";
+import { fmtGoalValue, goalPeriodLabel, responsiblesOf, statusMessage, achievedLabel, type GoalWithRefs } from "./goal-node";
 
 export const dynamic = "force-dynamic";
 
@@ -27,63 +28,13 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : (v 
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({ value: String(i + 1), label: monthShort(i + 1) }));
 const QUARTER_OPTIONS = [1, 2, 3, 4].map((q) => ({ value: String(q), label: `${q}º trimestre` }));
 
-function fmtVal(value: number, unit: string): string {
-  switch (unit) {
-    case "REAIS":
-      return formatCurrency(value);
-    case "PERCENTUAL":
-      return `${formatNumber(value)}%`;
-    case "HORAS":
-      return `${formatNumber(value)}h`;
-    default:
-      return formatNumber(value);
-  }
-}
-
-function goalPeriodLabel(g: Goal): string {
-  if (g.hierarchyLevel === "TRIMESTRAL" || (g.period === "TRIMESTRAL" && g.quarter))
-    return `${g.quarter}º tri ${g.year}`;
-  if (g.hierarchyLevel === "SEMANAL" || g.period === "SEMANAL")
-    return `Sem ${g.week ?? "?"} · ${g.month ? monthShort(g.month) : ""}/${g.year}`;
-  if (g.month) return `${monthShort(g.month)}/${g.year}`;
-  return `${g.year}`;
-}
-
-type GoalWithRefs = Goal & {
-  assignees: { isPrimary: boolean; user: { name: string } }[];
-  responsible: { name: string } | null;
+const ALERT_TONE: Record<string, string> = {
+  ATRASADA: "text-red-600 dark:text-red-400",
+  EM_RISCO: "text-amber-600 dark:text-amber-400",
+  PRAZO_PROXIMO: "text-amber-600 dark:text-amber-400",
+  BATIDA: "text-emerald-600 dark:text-emerald-400",
+  SUPERADA: "text-emerald-600 dark:text-emerald-400",
 };
-
-function responsiblesOf(g: GoalWithRefs): string[] {
-  if (g.assignees.length > 0) {
-    return [...g.assignees]
-      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
-      .map((a) => a.user.name);
-  }
-  return g.responsible ? [g.responsible.name] : [];
-}
-
-function statusMessage(g: Goal): string | null {
-  const now = new Date();
-  if (g.status === "ATRASADA" || g.status === "NAO_BATIDA") {
-    const p = goalPace(g, now);
-    const late = p.daysLate > 0 ? `Atrasada há ${p.daysLate} dia${p.daysLate === 1 ? "" : "s"}` : "Prazo encerrado";
-    return `${late} · Faltam ${fmtVal(p.remaining, g.unit)}`;
-  }
-  if (g.status === "EM_RISCO") {
-    const p = goalPace(g, now);
-    return `Ritmo atual: ${fmtVal(p.currentPerWeek, g.unit)}/sem · Necessário: ${fmtVal(p.neededPerWeek, g.unit)}/sem`;
-  }
-  return null;
-}
-
-function achievedLabel(g: Goal): string | null {
-  if (g.status === "SUPERADA")
-    return `Meta superada: ${Math.round(g.progressPercentage)}% concluído${g.achievedAt ? ` · em ${formatDate(g.achievedAt)}` : ""}`;
-  if (g.status === "BATIDA")
-    return g.achievedAt ? `Meta batida em ${formatDate(g.achievedAt)}` : "Meta batida";
-  return null;
-}
 
 export default async function MetasPage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireModule("METAS");
@@ -96,14 +47,17 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
   const fResp = one(sp.responsible);
   const fCc = one(sp.costCenter);
 
-  const where: Prisma.GoalWhereInput = { deletedAt: null };
-  if (fYear) where.year = Number(fYear);
-  if (fQuarter) where.quarter = Number(fQuarter);
-  if (fMonth) where.month = Number(fMonth);
-  if (fType && fType in GoalType) where.type = fType as GoalType;
-  if (fStatus && fStatus in GoalStatus) where.status = fStatus as GoalStatus;
-  if (fCc) where.costCenterId = fCc;
-  if (fResp) where.OR = [{ responsibleId: fResp }, { assignees: { some: { userId: fResp } } }];
+  const filters: Prisma.GoalWhereInput = { deletedAt: null };
+  if (fYear) filters.year = Number(fYear);
+  if (fQuarter) filters.quarter = Number(fQuarter);
+  if (fMonth) filters.month = Number(fMonth);
+  if (fType && fType in GoalType) filters.type = fType as GoalType;
+  if (fStatus && fStatus in GoalStatus) filters.status = fStatus as GoalStatus;
+  if (fCc) filters.costCenterId = fCc;
+  if (fResp) filters.OR = [{ responsibleId: fResp }, { assignees: { some: { userId: fResp } } }];
+
+  const vis = visibleGoalWhere(user.role, user.id);
+  const where: Prisma.GoalWhereInput = Object.keys(vis).length ? { AND: [filters, vis] } : filters;
 
   const [goals, users, costCenters] = await Promise.all([
     prisma.goal.findMany({
@@ -139,8 +93,8 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
       level: g.hierarchyLevel,
       status: g.status,
       periodLabel: goalPeriodLabel(g),
-      currentLabel: fmtVal(g.currentValue, g.unit),
-      targetLabel: fmtVal(g.targetValue, g.unit),
+      currentLabel: fmtGoalValue(g.currentValue, g.unit),
+      targetLabel: fmtGoalValue(g.targetValue, g.unit),
       progress: g.targetValue > 0 ? (g.currentValue / g.targetValue) * 100 : 0,
       responsibles: responsiblesOf(g),
       parentTitle: g.parentGoalId ? (byId.get(g.parentGoalId)?.title ?? null) : null,
@@ -151,14 +105,12 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
     };
   }
 
-  // Estratégicas: apenas metas TRIMESTRAIS (topo da hierarquia), com filhas aninhadas.
-  const strategicRoots = goals.filter((g) => g.hierarchyLevel === "TRIMESTRAL");
-  const strategicNodes = strategicRoots.map((g) => toNode(byId.get(g.id)!));
+  const strategicRoots = goals.filter((g) => g.hierarchyLevel === "ANUAL" || g.hierarchyLevel === "TRIMESTRAL");
+  // Só raízes (sem pai visível) para não duplicar as que já aparecem aninhadas.
+  const rootStrategic = strategicRoots.filter((g) => !g.parentGoalId || !byId.has(g.parentGoalId));
+  const strategicNodes = rootStrategic.map((g) => toNode(byId.get(g.id)!));
 
-  // Individuais: metas mensais e semanais (vinculadas ou não), agrupadas pelo responsável.
-  const individualGoals = goals.filter(
-    (g) => g.hierarchyLevel === "MENSAL" || g.hierarchyLevel === "SEMANAL",
-  );
+  const individualGoals = goals.filter((g) => g.hierarchyLevel === "MENSAL" || g.hierarchyLevel === "SEMANAL" || g.hierarchyLevel === "DIARIA");
   const groups = new Map<string, GoalNode[]>();
   for (const g of individualGoals) {
     const resp = responsiblesOf(byId.get(g.id)!)[0] ?? "Sem responsável";
@@ -171,24 +123,30 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
   const avulsas = goals.filter((g) => g.hierarchyLevel === "AVULSA");
   const avulsaNodes = avulsas.map((g) => toNode(byId.get(g.id)!, new Set(), false));
 
-  // Resumo.
   const total = goals.length;
   const batidas = goals.filter((g) => g.status === "BATIDA" || g.status === "SUPERADA").length;
   const emRisco = goals.filter((g) => g.status === "EM_RISCO").length;
   const atrasadas = goals.filter((g) => g.status === "ATRASADA" || g.status === "NAO_BATIDA").length;
   const overall = total > 0 ? Math.round(goals.reduce((s, g) => s + Math.min(100, Math.max(0, g.progressPercentage)), 0) / total) : 0;
-  const mainTri = [...strategicRoots].sort((a, b) => b.targetValue - a.targetValue)[0];
+  const mainTri = [...rootStrategic].sort((a, b) => b.targetValue - a.targetValue)[0];
 
+  const alerts = goalAlerts(goals).filter((a) => a.kind !== "BATIDA").slice(0, 8);
   const writable = canWrite(user.role);
 
   return (
     <>
-      <PageHeader title="Metas" description="Metas estratégicas, individuais e avulsas — hierarquia trimestral → mensal → semanal.">
+      <PageHeader title="Metas" description="Visão geral estratégica — hierarquia anual → trimestral → mensal → semanal, com progresso automático.">
+        <Button asChild variant="outline">
+          <Link href="/dashboard/metas/periodos">
+            <CalendarRange />
+            Planejamento
+          </Link>
+        </Button>
         {writable && (
           <>
             <ActionButton action={recalcAutomaticGoals} successMessage="Metas recalculadas." variant="outline">
               <RefreshCw />
-              Recalcular automáticas
+              Recalcular
             </ActionButton>
             <Button asChild>
               <Link href="/dashboard/metas/new">
@@ -207,6 +165,25 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
         <StatCard label="Atrasadas" value={atrasadas} tone="danger" icon={Clock} />
         <StatCard label="Conclusão geral" value={`${overall}%`} icon={ListChecks} hint={mainTri ? `Principal: ${mainTri.title}` : undefined} />
       </div>
+
+      {alerts.length > 0 && (
+        <Card className="p-4">
+          <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            <Bell className="size-4" />
+            Alertas
+          </h2>
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {alerts.map((a) => (
+              <li key={a.goalId + a.kind} className="text-sm">
+                <Link href={`/dashboard/metas/${a.goalId}`} className="hover:underline">
+                  <span className={ALERT_TONE[a.kind] ?? ""}>●</span> <span className="font-medium">{a.title}</span>
+                  <span className="text-muted-foreground"> — {a.message}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <Card className="p-4">
         <form className="grid gap-3 md:grid-cols-12">
@@ -247,7 +224,7 @@ export default async function MetasPage({ searchParams }: { searchParams: Promis
         <EmptyState
           icon={Target}
           title="Nenhuma meta"
-          description="Defina a primeira meta da equipe."
+          description="Comece criando a estrutura anual em Planejamento, ou defina uma meta avulsa."
           action={
             writable && (
               <Button asChild>

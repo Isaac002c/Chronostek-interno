@@ -9,6 +9,7 @@ import {
   PRIORITY_OPTIONS,
   TASK_STATUS_OPTIONS,
   MODULE_OPTIONS,
+  CONTRIBUTION_UNIT_OPTIONS,
   type Option,
 } from "@/lib/enums";
 import { Field, FormGrid } from "@/components/form/field";
@@ -27,18 +28,28 @@ export type TaskDefaults = {
   status?: string;
   dueDate?: string;
   module?: string;
+  goalId?: string | null;
+  planningPeriodId?: string | null;
+  contributionUnit?: string | null;
+  plannedContribution?: number | null;
+  realizedContribution?: number | null;
+  contributionWeight?: number | null;
+  evidenceUrl?: string | null;
+  evidenceNote?: string | null;
 };
 
 export function TaskForm({
   action,
   users,
   costCenters,
+  goals = [],
   defaults = {},
   submitLabel = "Salvar tarefa",
 }: {
   action: (prev: ActionState, fd: FormData) => Promise<ActionState>;
   users: Option[];
   costCenters: Option[];
+  goals?: Option[];
   defaults?: TaskDefaults;
   submitLabel?: string;
 }) {
@@ -50,6 +61,7 @@ export function TaskForm({
 
   return (
     <form action={formAction} className="space-y-6">
+      {defaults.planningPeriodId && <input type="hidden" name="planningPeriodId" value={defaults.planningPeriodId} />}
       <FormGrid>
         <Field label="Título" htmlFor="title" required error={fe.title} className="sm:col-span-2">
           <Input id="title" name="title" defaultValue={defaults.title} required />
@@ -76,6 +88,35 @@ export function TaskForm({
           <Textarea id="description" name="description" defaultValue={defaults.description ?? ""} />
         </Field>
       </FormGrid>
+
+      <div className="rounded-lg border border-dashed border-input p-4">
+        <p className="mb-3 text-sm font-semibold text-muted-foreground">
+          Meta / contribuição <span className="font-normal">(opcional — ao concluir, o valor realizado alimenta a meta)</span>
+        </p>
+        <FormGrid>
+          <Field label="Meta vinculada" htmlFor="goalId" className="sm:col-span-2">
+            <Select id="goalId" name="goalId" defaultValue={defaults.goalId ?? ""} placeholder="— Nenhuma —" options={goals} />
+          </Field>
+          <Field label="Unidade de contribuição" htmlFor="contributionUnit">
+            <Select id="contributionUnit" name="contributionUnit" defaultValue={defaults.contributionUnit ?? ""} placeholder="—" options={CONTRIBUTION_UNIT_OPTIONS} />
+          </Field>
+          <Field label="Peso na meta (%)" htmlFor="contributionWeight" hint="Opcional.">
+            <Input id="contributionWeight" name="contributionWeight" type="number" step="0.01" defaultValue={defaults.contributionWeight ?? ""} />
+          </Field>
+          <Field label="Contribuição planejada" htmlFor="plannedContribution">
+            <Input id="plannedContribution" name="plannedContribution" type="number" step="0.01" defaultValue={defaults.plannedContribution ?? ""} />
+          </Field>
+          <Field label="Contribuição realizada" htmlFor="realizedContribution" hint="Preenchida automaticamente ao concluir, se em branco.">
+            <Input id="realizedContribution" name="realizedContribution" type="number" step="0.01" defaultValue={defaults.realizedContribution ?? ""} />
+          </Field>
+          <Field label="Link de evidência" htmlFor="evidenceUrl">
+            <Input id="evidenceUrl" name="evidenceUrl" type="url" placeholder="https://…" defaultValue={defaults.evidenceUrl ?? ""} />
+          </Field>
+          <Field label="Observação / resultado" htmlFor="evidenceNote" className="sm:col-span-2">
+            <Textarea id="evidenceNote" name="evidenceNote" defaultValue={defaults.evidenceNote ?? ""} />
+          </Field>
+        </FormGrid>
+      </div>
 
       <div className="flex items-center gap-2">
         <SubmitButton>
