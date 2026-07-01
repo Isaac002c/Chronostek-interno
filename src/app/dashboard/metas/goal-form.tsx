@@ -48,6 +48,7 @@ export type GoalDefaults = {
   status?: string;
   calculationMode?: string;
   includeInParentProgress?: boolean;
+  parentWeight?: number | null;
   startDate?: string;
   endDate?: string;
 };
@@ -202,10 +203,15 @@ export function GoalForm({
         />
 
         {showParent && (
+          <Field label="Peso na meta-pai" htmlFor="parentWeight" hint="Opcional. Usado quando a unidade difere da meta-pai (média ponderada de %). Em branco = peso 1.">
+            <Input id="parentWeight" name="parentWeight" type="number" step="0.01" min="0" defaultValue={defaults.parentWeight ?? ""} />
+          </Field>
+        )}
+        {showParent && (
           <div className="sm:col-span-2">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" name="includeInParentProgress" defaultChecked={defaults.includeInParentProgress ?? true} className="size-4 rounded border-input" />
-              <span>Incluir progresso desta meta no progresso da meta pai (mesma unidade).</span>
+              <span>Incluir progresso desta meta no progresso da meta pai.</span>
             </label>
           </div>
         )}

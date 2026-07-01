@@ -89,6 +89,7 @@ export default async function EditGoalPage({
               status: goal.status,
               calculationMode: goal.calculationMode,
               includeInParentProgress: goal.includeInParentProgress,
+              parentWeight: goal.parentWeight,
               startDate: toDateInputValue(goal.startDate),
               endDate: toDateInputValue(goal.endDate),
             }}

@@ -1056,6 +1056,7 @@ model Goal {
   unit                    GoalUnit            @default(REAIS)
   calculationMode         GoalCalculationMode @default(MANUAL)
   includeInParentProgress Boolean             @default(true)
+  parentWeight            Float? // peso desta meta na composição do progresso do pai (unidades diferentes)
   responsibleId           String?
   costCenterId            String?
   area                    String?

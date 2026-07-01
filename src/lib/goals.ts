@@ -9,6 +9,7 @@ import {
   sumChecklistContributions,
   effectiveResponsibles,
   effectiveCostCenter,
+  aggregateChildrenValue,
   type AssigneeDistInput,
   type GoalLite,
   type EffectiveResponsibles,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/goal-math";
 
 // Reexporta as funções puras (definidas em goal-math.ts) mantendo os imports existentes.
-export { goalStatusFor, computeGoalStatus, equalSplit, distributeAssignees, sumChecklistContributions, effectiveResponsibles, effectiveCostCenter };
+export { goalStatusFor, computeGoalStatus, equalSplit, distributeAssignees, sumChecklistContributions, effectiveResponsibles, effectiveCostCenter, aggregateChildrenValue };
 export type { AssigneeDistInput, GoalLite, EffectiveResponsibles, EffectiveCostCenter };
 
 /**
@@ -337,17 +338,21 @@ export async function recomputeGoalTree(performedById?: string | null): Promise<
   const now = new Date();
 
   for (const g of sorted) {
-    const kids = (childrenOf.get(g.id) ?? []).filter(
-      (k) => k.includeInParentProgress && k.unit === g.unit,
+    const incKids = (childrenOf.get(g.id) ?? []).filter((k) => k.includeInParentProgress);
+    const agg = aggregateChildrenValue(
+      g.unit,
+      g.targetValue,
+      incKids.map((k) => ({
+        currentValue: computed.get(k.id) ?? k.currentValue,
+        targetValue: k.targetValue,
+        unit: k.unit,
+        parentWeight: k.parentWeight,
+        status: k.status,
+      })),
     );
-    let current: number;
-    if (kids.length > 0) {
-      current = kids.reduce((s, k) => s + (computed.get(k.id) ?? k.currentValue), 0);
-    } else {
-      current = await leafValue(g);
-    }
+    const current = agg !== null ? agg : await leafValue(g);
     computed.set(g.id, current);
-    await applyGoalComputation(g, current, kids.length > 0, now, performedById);
+    await applyGoalComputation(g, current, agg !== null, now, performedById);
   }
 }
 
@@ -366,11 +371,12 @@ export async function recomputeGoalChain(goalId: string, performedById?: string 
     if (!g || g.deletedAt) break;
 
     const kids = await prisma.goal.findMany({
-      where: { parentGoalId: currentId, deletedAt: null, includeInParentProgress: true, unit: g.unit },
-      select: { currentValue: true },
+      where: { parentGoalId: currentId, deletedAt: null, includeInParentProgress: true },
+      select: { currentValue: true, targetValue: true, unit: true, parentWeight: true, status: true },
     });
-    const current = kids.length > 0 ? kids.reduce((s, k) => s + k.currentValue, 0) : await leafValue(g);
-    await applyGoalComputation(g, current, kids.length > 0, now, performedById);
+    const agg = aggregateChildrenValue(g.unit, g.targetValue, kids);
+    const current = agg !== null ? agg : await leafValue(g);
+    await applyGoalComputation(g, current, agg !== null, now, performedById);
     id = g.parentGoalId;
   }
 }

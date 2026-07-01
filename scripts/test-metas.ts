@@ -9,7 +9,9 @@ import {
   sumChecklistContributions,
   effectiveResponsibles,
   effectiveCostCenter,
+  aggregateChildrenValue,
   type GoalLite,
+  type RollupChild,
 } from "../src/lib/goal-math";
 import {
   spDayStart,
@@ -138,6 +140,21 @@ console.log("Herança de responsáveis / centro de custo (pai→filho, override)
   eq([cTri.costCenterId, cTri.inherited], ["cc-1", true], "trimestre herda centro de custo do ano");
   const cMes = effectiveCostCenter("mes", map);
   eq([cMes.costCenterId, cMes.inherited], ["cc-2", false], "mês sobrescreve centro de custo");
+}
+
+console.log("Roll-up ponderado / exclusão de status:");
+{
+  const child = (currentValue: number, targetValue: number, unit: string, parentWeight: number | null, status = "EM_ANDAMENTO"): RollupChild => ({ currentValue, targetValue, unit, parentWeight, status });
+  // mesma unidade → soma de valores
+  eq(aggregateChildrenValue("REAIS", 9000, [child(3000, 3000, "REAIS", null), child(3000, 3000, "REAIS", null), child(3000, 3000, "REAIS", null)]), 9000, "mesma unidade soma valores");
+  // unidades diferentes → média ponderada de % (pesos iguais)
+  eq(aggregateChildrenValue("REAIS", 100, [child(50, 100, "NUMERO", 1), child(100, 100, "NUMERO", 1)]), 75, "unidades diferentes: média 75% → 75");
+  // pesos diferentes
+  eq(aggregateChildrenValue("REAIS", 100, [child(100, 100, "NUMERO", 3), child(0, 100, "NUMERO", 1)]), 75, "peso 3:1 → 75%");
+  // canceladas/pausadas não entram
+  eq(aggregateChildrenValue("REAIS", 9000, [child(3000, 3000, "REAIS", null), child(5000, 5000, "REAIS", null, "CANCELADA"), child(1000, 1000, "REAIS", null, "PAUSADA")]), 3000, "cancelada/pausada não somam");
+  // sem filhas incluídas → null (usa valor de folha)
+  eq(aggregateChildrenValue("REAIS", 100, [child(1, 1, "REAIS", null, "ARQUIVADA")]), null, "só arquivadas → null");
 }
 
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam.`);

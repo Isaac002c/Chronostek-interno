@@ -180,3 +180,43 @@ export function sumChecklistContributions(
     .reduce((s, c) => s + c.realizedValue, 0);
   return primary + extra;
 }
+
+// ─────────────────────────── Agregação de progresso (roll-up) ───────────────────────────
+
+/** Status que NÃO entram no roll-up (nem numerador nem denominador). */
+export const EXCLUDED_FROM_ROLLUP = new Set<string>(["CANCELADA", "PAUSADA", "ARQUIVADA"]);
+
+export type RollupChild = {
+  currentValue: number;
+  targetValue: number;
+  unit: string;
+  parentWeight: number | null;
+  status: string;
+};
+
+/**
+ * Valor agregado de uma meta-pai a partir das filhas incluídas:
+ * - Mesma unidade da mãe → SOMA dos valores (comportamento padrão, sem % falsa).
+ * - Unidades diferentes → média PONDERADA dos percentuais (peso = parentWeight ?? 1),
+ *   convertida de volta para valor via alvo do pai.
+ * Filhas canceladas/pausadas/arquivadas são ignoradas (sem prejudicar nem inflar).
+ * Retorna null quando não há filhas incluídas (a mãe usa o próprio valor de folha).
+ */
+export function aggregateChildrenValue(parentUnit: string, parentTarget: number, children: RollupChild[]): number | null {
+  const inc = children.filter((c) => !EXCLUDED_FROM_ROLLUP.has(c.status));
+  if (inc.length === 0) return null;
+
+  const sameUnit = inc.every((c) => c.unit === parentUnit);
+  if (sameUnit) return inc.reduce((s, c) => s + c.currentValue, 0);
+
+  let weighted = 0;
+  let weights = 0;
+  for (const c of inc) {
+    const w = c.parentWeight ?? 1;
+    const pct = c.targetValue > 0 ? Math.min(100, Math.max(0, (c.currentValue / c.targetValue) * 100)) : 0;
+    weighted += w * pct;
+    weights += w;
+  }
+  const pct = weights > 0 ? weighted / weights : 0;
+  return (pct / 100) * parentTarget;
+}
