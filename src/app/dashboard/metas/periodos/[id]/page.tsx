@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Plus, ChevronRight, Target, CalendarDays, Home, TrendingUp } from "lucide-react";
+import { Plus, ChevronRight, Target, CalendarDays, Home, TrendingUp, ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
@@ -174,9 +174,9 @@ export default async function PeriodPage({
   return (
     <>
       <nav className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
-        <Link href="/dashboard/metas/periodos" className="inline-flex items-center gap-1 hover:text-foreground">
+        <Link href="/dashboard/metas" className="inline-flex items-center gap-1 hover:text-foreground">
           <Home className="size-3.5" />
-          Planejamento
+          Metas
         </Link>
         {breadcrumb.map((b) => (
           <span key={b.id} className="inline-flex items-center gap-1">
@@ -196,6 +196,12 @@ export default async function PeriodPage({
         title={period.name}
         description={`${PLANNING_PERIOD_TYPE_LABELS[period.type]} · ${formatDate(period.startDate)} – ${formatDate(period.endDate)}`}
       >
+        <Button asChild variant="ghost">
+          <Link href={period.parent ? `/dashboard/metas/periodos/${period.parent.id}` : "/dashboard/metas"}>
+            <ArrowLeft />
+            Voltar
+          </Link>
+        </Button>
         <StatusBadge value={period.status} labels={PLANNING_PERIOD_STATUS_LABELS} tones={PLANNING_PERIOD_STATUS_TONE} />
         {writable && (
           <Button asChild>
@@ -287,7 +293,21 @@ export default async function PeriodPage({
 
           {selectedKey && (
             <Card className="space-y-3 p-4">
-              <h3 className="text-sm font-semibold">Checklists de {selectedDayLabel}</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">Dia {selectedDayLabel}</h3>
+                {(() => {
+                  const doneN = dayChecklists.filter((c) => c.done).length;
+                  const totalN = dayChecklists.length;
+                  const pct = totalN > 0 ? Math.round((doneN / totalN) * 100) : 0;
+                  return <span className="text-xs text-muted-foreground">{doneN}/{totalN} checklists · {pct}%</span>;
+                })()}
+              </div>
+              {(() => {
+                const resp = [...new Set(dayChecklists.map((c) => c.assignee).filter(Boolean) as string[])];
+                return resp.length > 0 ? (
+                  <p className="text-xs text-muted-foreground">Responsáveis do dia: {resp.join(", ")}</p>
+                ) : null;
+              })()}
               {writable && (
                 <QuickChecklistForm
                   goals={dayGoalOptions}
@@ -297,7 +317,7 @@ export default async function PeriodPage({
                 />
               )}
               {dayChecklists.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhum checklist para este dia.</p>
+                <p className="text-sm text-muted-foreground">Nenhum checklist para este dia. Adicione acima — ao concluir, o valor realizado alimenta a meta vinculada.</p>
               ) : (
                 <div className="space-y-2">
                   {dayChecklists.map((c) => (
