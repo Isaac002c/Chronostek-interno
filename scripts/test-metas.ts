@@ -21,6 +21,7 @@ import {
   weekdayOf,
   daysInMonth,
 } from "../src/lib/tz";
+import { visibleGoalWhere } from "../src/lib/rbac";
 
 let passed = 0;
 let failed = 0;
@@ -155,6 +156,16 @@ console.log("Roll-up ponderado / exclusão de status:");
   eq(aggregateChildrenValue("REAIS", 9000, [child(3000, 3000, "REAIS", null), child(5000, 5000, "REAIS", null, "CANCELADA"), child(1000, 1000, "REAIS", null, "PAUSADA")]), 3000, "cancelada/pausada não somam");
   // sem filhas incluídas → null (usa valor de folha)
   eq(aggregateChildrenValue("REAIS", 100, [child(1, 1, "REAIS", null, "ARQUIVADA")]), null, "só arquivadas → null");
+}
+
+console.log("Permissões (visibilidade de metas por papel):");
+{
+  eq(Object.keys(visibleGoalWhere("SUPER_ADMIN", "u1")).length, 0, "admin vê todas");
+  eq(Object.keys(visibleGoalWhere("SOCIO_ADMIN", "u1")).length, 0, "sócio-admin vê todas");
+  eq(Object.keys(visibleGoalWhere("VIEWER", "u1")).length, 0, "viewer vê todas (leitura)");
+  const w = visibleGoalWhere("COMERCIAL", "u1");
+  ok(Array.isArray(w.OR) && w.OR.length === 3, "papel de área: filtro OR (próprias + assignee + estratégicas)");
+  ok(JSON.stringify(w).includes("u1"), "filtro restringe ao próprio usuário");
 }
 
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam.`);
