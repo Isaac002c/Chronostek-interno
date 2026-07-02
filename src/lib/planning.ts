@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import type { PlanningPeriod, Prisma } from "@prisma/client";
 import { monthShort, monthLabel } from "@/lib/format";
@@ -35,73 +36,56 @@ export async function ensurePlanningYear(
   });
   if (existing) return existing;
 
-  return prisma.$transaction(async (tx) => {
-    const yr = yearRange(year);
-    const annual = await tx.planningPeriod.create({
-      data: {
-        name: String(year),
-        type: "ANUAL",
-        year,
-        startDate: yr.start,
-        endDate: yr.end,
-        status: "PLANEJADO",
-        createdById: createdById ?? null,
-      },
+  const owner = createdById ?? null;
+  const yr = yearRange(year);
+  const annualId = randomUUID();
+
+  const annual: Prisma.PlanningPeriodCreateManyInput = {
+    id: annualId, name: String(year), type: "ANUAL", year,
+    startDate: yr.start, endDate: yr.end, status: "PLANEJADO", createdById: owner,
+  };
+  const quarters: Prisma.PlanningPeriodCreateManyInput[] = [];
+  const months: Prisma.PlanningPeriodCreateManyInput[] = [];
+  const weeks: Prisma.PlanningPeriodCreateManyInput[] = [];
+
+  for (let q = 1; q <= 4; q++) {
+    const quarterId = randomUUID();
+    const qr = quarterRange(year, q);
+    quarters.push({
+      id: quarterId, name: `${q}º Trimestre ${year}`, type: "TRIMESTRAL", year, quarter: q,
+      startDate: qr.start, endDate: qr.end, parentId: annualId, createdById: owner,
     });
-
-    for (let q = 1; q <= 4; q++) {
-      const qr = quarterRange(year, q);
-      const quarter = await tx.planningPeriod.create({
-        data: {
-          name: `${q}º Trimestre ${year}`,
-          type: "TRIMESTRAL",
-          year,
-          quarter: q,
-          startDate: qr.start,
-          endDate: qr.end,
-          parentId: annual.id,
-          createdById: createdById ?? null,
-        },
+    for (let mi = 0; mi < 3; mi++) {
+      const m = (q - 1) * 3 + 1 + mi;
+      const monthId = randomUUID();
+      const mr = monthRange(year, m);
+      months.push({
+        id: monthId, name: monthLabel(m, year), type: "MENSAL", year, quarter: q, month: m,
+        startDate: mr.start, endDate: mr.end, parentId: quarterId, createdById: owner,
       });
-
-      for (let mi = 0; mi < 3; mi++) {
-        const m = (q - 1) * 3 + 1 + mi;
-        const mr = monthRange(year, m);
-        const month = await tx.planningPeriod.create({
-          data: {
-            name: monthLabel(m, year),
-            type: "MENSAL",
-            year,
-            quarter: q,
-            month: m,
-            startDate: mr.start,
-            endDate: mr.end,
-            parentId: quarter.id,
-            createdById: createdById ?? null,
-          },
+      for (const w of calendarWeeksOfMonth(year, m)) {
+        weeks.push({
+          id: randomUUID(), name: `Semana ${w.week} · ${monthShort(m)}/${year}`, type: "SEMANAL",
+          year, quarter: q, month: m, week: w.week,
+          startDate: spDayStart(year, m, w.startDay), endDate: spDayEnd(year, m, w.endDay),
+          parentId: monthId, createdById: owner,
         });
-
-        for (const w of calendarWeeksOfMonth(year, m)) {
-          await tx.planningPeriod.create({
-            data: {
-              name: `Semana ${w.week} · ${monthShort(m)}/${year}`,
-              type: "SEMANAL",
-              year,
-              quarter: q,
-              month: m,
-              week: w.week,
-              startDate: spDayStart(year, m, w.startDay),
-              endDate: spDayEnd(year, m, w.endDay),
-              parentId: month.id,
-              createdById: createdById ?? null,
-            },
-          });
-        }
       }
     }
+  }
 
-    return annual;
-  });
+  // createMany por nível (pais antes das filhas), numa transação em lote: rápido e
+  // atômico, sem ~69 round-trips sequenciais (evitava o timeout de transação
+  // interativa quando o request vem da Vercel via internet até o Postgres da VPS).
+  await prisma.$transaction([
+    prisma.planningPeriod.createMany({ data: [annual] }),
+    prisma.planningPeriod.createMany({ data: quarters }),
+    prisma.planningPeriod.createMany({ data: months }),
+    prisma.planningPeriod.createMany({ data: weeks }),
+  ]);
+
+  const created = await prisma.planningPeriod.findUnique({ where: { id: annualId } });
+  return created!;
 }
 
 export async function listPlanningYears() {

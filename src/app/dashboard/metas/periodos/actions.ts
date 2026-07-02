@@ -20,7 +20,8 @@ export async function createPlanningYear(
 
   try {
     await ensurePlanningYear(year, auth.user.id);
-  } catch {
+  } catch (e) {
+    console.error("createPlanningYear falhou:", e);
     return { error: "Não foi possível criar o período anual." };
   }
 
