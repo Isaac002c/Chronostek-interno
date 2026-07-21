@@ -1,4 +1,4 @@
-// Chronostek — Sistema Interno (CRM/ERP modular)
+// Telun — Sistema Interno (CRM/ERP modular)
 // Schema Prisma. Money fields use Float for clean Server->Client serialization
 // (documented MVP trade-off vs Decimal).
 //

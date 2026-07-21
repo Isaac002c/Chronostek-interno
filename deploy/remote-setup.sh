@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Provisiona o Chronostek na VPS de forma ISOLADA:
+# Provisiona a Telun (sistema interno) na VPS de forma ISOLADA:
 #  - Postgres em container SEM publicar porta (apenas rede interna do compose)
 #  - App web exposto na porta 8080
-# Rode a partir de /opt/chronostek (o comando de publicação já faz isso).
+# Rode a partir de /opt/telun (o comando de publicação já faz isso).
 set -e
 cd "$(dirname "$0")/.."
 
@@ -34,5 +34,5 @@ docker compose exec -T web npx prisma db seed || echo "seed: provavelmente ja po
 docker compose ps
 echo ""
 echo "OK -> aplicacao no ar na porta 8080"
-echo "login: admin@chronostek.com.br (senha definida via SEED_ADMIN_PASSWORD)"
+echo "login: admin@${SEED_EMAIL_DOMAIN:-telun.com.br} (senha definida via SEED_ADMIN_PASSWORD)"
 echo "(se nao abrir externamente, rode: ufw allow 8080/tcp)"

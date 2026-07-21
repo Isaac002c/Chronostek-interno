@@ -1,9 +1,13 @@
-# Stack isolado do Chronostek. O Postgres NÃO publica porta (fica apenas na
+# Stack isolado da Telun. O Postgres NÃO publica porta (fica apenas na
 # rede interna do compose). Só o app web é exposto (porta 8080).
+#
+# NOTA DE REBRANDING: o NOME do banco e do volume permanecem "chronostek" de
+# propósito — renomeá-los criaria um banco/volume vazio e PERDERIA os dados
+# existentes. Para renomear com segurança seria preciso dump + restore.
 services:
   db:
     image: postgres:16
-    container_name: chronostek-db
+    container_name: telun-db
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -11,11 +15,11 @@ services:
     volumes:
       - chronostek_pgdata:/var/lib/postgresql/data
     networks:
-      - chronostek
+      - telun
 
   web:
     build: .
-    container_name: chronostek-web
+    container_name: telun-web
     restart: unless-stopped
     depends_on:
       - db
@@ -28,11 +32,11 @@ services:
     ports:
       - "8080:3000"
     networks:
-      - chronostek
+      - telun
 
 volumes:
   chronostek_pgdata:
 
 networks:
-  chronostek:
+  telun:
     driver: bridge

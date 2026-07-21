@@ -2,68 +2,175 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  TELUN · Sistema de Design
+  ─────────────────────────
+  Tokens globais centralizados. NÃO usar hex direto nos componentes — sempre
+  consumir via Tailwind (bg-primary, text-accent-violet, ...) ou hsl(var(--token)).
+
+  Paleta (referência da marca):
+    Cósmico          #0B0B12   ~ hsl(240 24% 6%)
+    Violeta profundo #3B1F6A   ~ hsl(262 55% 27%)
+    Lilás elétrico   #A56BFF   ~ hsl(264 100% 71%)
+    Cobre luminoso   #FF8A3D   ~ hsl(24 100% 62%)
+    Dourado areia    #FFD8A6   ~ hsl(34 100% 82%)
+
+  Dark-first: o tema escuro cósmico é a experiência principal da Telun.
+  O tema claro é uma versão sóbria e profissional para uso operacional diurno.
+*/
+
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 199 89% 48%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 187 92% 43%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 142 71% 41%;
-    --success-foreground: 0 0% 100%;
-    --warning: 35 92% 48%;
-    --warning-foreground: 0 0% 100%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 199 89% 48%;
-    --radius: 0.6rem;
+    /* ── Superfícies ── */
+    --background: 250 40% 99%;
+    --foreground: 245 45% 11%;
+    --surface: 0 0% 100%;
+    --surface-foreground: 245 45% 11%;
+    --surface-elevated: 250 40% 98%;
+    --surface-elevated-foreground: 245 45% 11%;
 
-    --sidebar: 222 47% 11%;
-    --sidebar-foreground: 210 40% 92%;
-    --sidebar-accent: 199 89% 48%;
-    --sidebar-border: 217 33% 20%;
+    /* Compat: card/popover mapeiam para surface/elevated */
+    --card: 0 0% 100%;
+    --card-foreground: 245 45% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 245 45% 11%;
+
+    /* ── Texto ── */
+    --text-primary: 245 45% 11%;
+    --text-secondary: 248 14% 42%;
+
+    /* ── Marca / ação ── */
+    --primary: 263 70% 55%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 263 72% 48%;
+
+    --accent-violet: 264 85% 62%;
+    --accent-violet-foreground: 0 0% 100%;
+    --accent-orange: 24 90% 52%;
+    --accent-orange-foreground: 0 0% 100%;
+    --accent-gold: 34 85% 66%;
+
+    /* Compat: accent usado em hovers/realces */
+    --accent: 264 60% 96%;
+    --accent-foreground: 263 70% 40%;
+
+    --secondary: 250 30% 95%;
+    --secondary-foreground: 245 40% 20%;
+    --muted: 250 30% 96%;
+    --muted-foreground: 248 14% 42%;
+
+    /* ── Estados ── */
+    --success: 152 58% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 34 90% 46%;
+    --warning-foreground: 0 0% 100%;
+    --error: 0 74% 52%;
+    --error-foreground: 0 0% 100%;
+    --destructive: 0 74% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --info: 220 80% 56%;
+    --info-foreground: 0 0% 100%;
+
+    /* ── Bordas / inputs / foco ── */
+    --border: 250 24% 90%;
+    --input: 250 24% 88%;
+    --ring: 264 85% 62%;
+    --focus-ring: 264 85% 62%;
+    --radius: 0.7rem;
+
+    /* ── Sidebar ── */
+    --sidebar: 248 46% 10%;
+    --sidebar-foreground: 250 30% 90%;
+    --sidebar-accent: 264 100% 74%;
+    --sidebar-border: 250 24% 22%;
+
+    /* ── Sombras (tom cósmico sutil) ── */
+    --shadow-color: 250 45% 20%;
+    --shadow-sm: 0 1px 2px 0 hsl(var(--shadow-color) / 0.06);
+    --shadow-md: 0 4px 16px -4px hsl(var(--shadow-color) / 0.12);
+    --shadow-lg: 0 12px 40px -8px hsl(var(--shadow-color) / 0.18);
+    --shadow-glow: 0 0 0 1px hsl(var(--accent-violet) / 0.15), 0 8px 32px -8px hsl(var(--accent-violet) / 0.25);
+
+    /* ── Gradientes ── */
+    --gradient-brand: linear-gradient(135deg, hsl(262 55% 40%) 0%, hsl(264 85% 62%) 45%, hsl(24 90% 55%) 100%);
+    --gradient-violet: linear-gradient(135deg, hsl(262 55% 45%) 0%, hsl(264 90% 66%) 100%);
+    --gradient-copper: linear-gradient(135deg, hsl(24 90% 55%) 0%, hsl(34 85% 70%) 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(var(--surface-elevated)) 0%, hsl(var(--surface)) 100%);
   }
 
   .dark {
-    --background: 222 47% 8%;
-    --foreground: 210 40% 96%;
-    --card: 222 44% 11%;
-    --card-foreground: 210 40% 96%;
-    --popover: 222 44% 11%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 190 95% 48%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 187 92% 43%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 142 64% 42%;
-    --success-foreground: 0 0% 100%;
-    --warning: 35 92% 52%;
-    --warning-foreground: 222 47% 11%;
-    --border: 217 33% 20%;
-    --input: 217 33% 22%;
-    --ring: 190 95% 48%;
+    /* ── Superfícies (cósmico) ── */
+    --background: 245 25% 6%;
+    --foreground: 250 20% 96%;
+    --surface: 248 22% 9%;
+    --surface-foreground: 250 20% 96%;
+    --surface-elevated: 250 22% 12%;
+    --surface-elevated-foreground: 250 20% 96%;
 
-    --sidebar: 222 47% 6%;
-    --sidebar-foreground: 210 40% 92%;
-    --sidebar-accent: 190 95% 48%;
-    --sidebar-border: 217 33% 16%;
+    --card: 248 22% 9%;
+    --card-foreground: 250 20% 96%;
+    --popover: 250 22% 12%;
+    --popover-foreground: 250 20% 96%;
+
+    /* ── Texto ── */
+    --text-primary: 250 20% 96%;
+    --text-secondary: 250 12% 66%;
+
+    /* ── Marca / ação ── */
+    --primary: 264 90% 68%;
+    --primary-foreground: 245 30% 8%;
+    --primary-hover: 264 95% 74%;
+
+    --accent-violet: 264 100% 71%;
+    --accent-violet-foreground: 245 30% 8%;
+    --accent-orange: 24 100% 62%;
+    --accent-orange-foreground: 245 30% 8%;
+    --accent-gold: 34 100% 82%;
+
+    --accent: 264 40% 18%;
+    --accent-foreground: 264 100% 82%;
+
+    --secondary: 250 22% 16%;
+    --secondary-foreground: 250 20% 92%;
+    --muted: 250 20% 15%;
+    --muted-foreground: 250 12% 64%;
+
+    /* ── Estados ── */
+    --success: 152 55% 46%;
+    --success-foreground: 245 30% 8%;
+    --warning: 34 95% 62%;
+    --warning-foreground: 245 30% 8%;
+    --error: 0 72% 58%;
+    --error-foreground: 0 0% 100%;
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --info: 220 85% 66%;
+    --info-foreground: 245 30% 8%;
+
+    /* ── Bordas / inputs / foco ── */
+    --border: 250 20% 18%;
+    --input: 250 20% 20%;
+    --ring: 264 100% 71%;
+    --focus-ring: 264 100% 71%;
+
+    /* ── Sidebar (mais profundo que o fundo) ── */
+    --sidebar: 245 30% 5%;
+    --sidebar-foreground: 250 20% 90%;
+    --sidebar-accent: 264 100% 74%;
+    --sidebar-border: 250 20% 15%;
+
+    /* ── Sombras (cósmico) ── */
+    --shadow-color: 245 60% 2%;
+    --shadow-sm: 0 1px 2px 0 hsl(var(--shadow-color) / 0.4);
+    --shadow-md: 0 4px 16px -4px hsl(var(--shadow-color) / 0.55);
+    --shadow-lg: 0 12px 40px -8px hsl(var(--shadow-color) / 0.7);
+    --shadow-glow: 0 0 0 1px hsl(var(--accent-violet) / 0.2), 0 8px 40px -8px hsl(var(--accent-violet) / 0.35);
+
+    /* ── Gradientes ── */
+    --gradient-brand: linear-gradient(135deg, hsl(262 55% 32%) 0%, hsl(264 100% 71%) 45%, hsl(24 100% 62%) 100%);
+    --gradient-violet: linear-gradient(135deg, hsl(262 60% 40%) 0%, hsl(264 100% 71%) 100%);
+    --gradient-copper: linear-gradient(135deg, hsl(24 100% 60%) 0%, hsl(34 100% 78%) 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(var(--surface-elevated)) 0%, hsl(var(--surface)) 100%);
   }
 }
 
@@ -75,10 +182,15 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  /* Anel de foco consistente e acessível em toda a aplicação */
+  :focus-visible {
+    outline: 2px solid hsl(var(--focus-ring));
+    outline-offset: 2px;
+  }
 }
 
-/* Scrollbar discreta para o tema escuro/claro */
 @layer utilities {
+  /* Scrollbar discreta */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;
@@ -90,5 +202,27 @@
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background-color: hsl(var(--border));
     border-radius: 9999px;
+  }
+
+  /* Texto com gradiente de marca (para títulos de destaque) */
+  .text-gradient-brand {
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Fundo cósmico imersivo — usar só em telas institucionais (login/onboarding/empty) */
+  .bg-cosmic {
+    background-color: hsl(var(--sidebar));
+    background-image:
+      radial-gradient(60% 50% at 80% 0%, hsl(var(--accent-violet) / 0.18) 0%, transparent 60%),
+      radial-gradient(50% 40% at 0% 100%, hsl(var(--accent-orange) / 0.1) 0%, transparent 55%),
+      radial-gradient(40% 40% at 50% 40%, hsl(262 60% 40% / 0.15) 0%, transparent 70%);
+  }
+
+  /* Realce sutil de brilho para cards de destaque */
+  .glow-violet {
+    box-shadow: var(--shadow-glow);
   }
 }

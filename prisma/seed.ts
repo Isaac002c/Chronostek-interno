@@ -3,6 +3,10 @@ import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+// Domínio institucional dos usuários-semente. Configurável para instalações
+// novas; não afeta usuários já existentes no banco (upsert é por e-mail).
+const EMAIL_DOMAIN = process.env.SEED_EMAIL_DOMAIN?.trim() || "telun.com.br";
+
 const now = new Date();
 function compOffset(n: number) {
   const d = new Date(now.getFullYear(), now.getMonth() - n, 1);
@@ -16,7 +20,7 @@ function daysFromNow(d: number) {
 }
 
 async function main() {
-  console.log("🌱 Seed Chronostek — iniciando...");
+  console.log("🌱 Seed Telun — iniciando...");
 
   // ───────────── Centros de custo ─────────────
   const costCentersData = [
@@ -70,14 +74,14 @@ async function main() {
   // ───────────── Usuários ─────────────
   const passwordHash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD ?? "changeme", 10);
   const usersData = [
-    { name: "Administrador Chronostek", email: "admin@chronostek.com.br", role: "SUPER_ADMIN" as const, cc: 4000 },
-    { name: "Sócio Diretor", email: "socio@chronostek.com.br", role: "SOCIO_ADMIN" as const, cc: 1000 },
-    { name: "Ana Financeiro", email: "financeiro@chronostek.com.br", role: "FINANCEIRO" as const, cc: 1000 },
-    { name: "Bruno Comercial", email: "comercial@chronostek.com.br", role: "COMERCIAL" as const, cc: 2000 },
-    { name: "Carla Marketing", email: "marketing@chronostek.com.br", role: "MARKETING" as const, cc: 3000 },
-    { name: "Diego TI", email: "ti@chronostek.com.br", role: "TI" as const, cc: 4000 },
-    { name: "Elaine Jurídico", email: "juridico@chronostek.com.br", role: "JURIDICO" as const, cc: 5000 },
-    { name: "Felipe BDR", email: "bdr@chronostek.com.br", role: "BDR" as const, cc: 2000 },
+    { name: "Administrador Telun", email: `admin@${EMAIL_DOMAIN}`, role: "SUPER_ADMIN" as const, cc: 4000 },
+    { name: "Sócio Diretor", email: `socio@${EMAIL_DOMAIN}`, role: "SOCIO_ADMIN" as const, cc: 1000 },
+    { name: "Ana Financeiro", email: `financeiro@${EMAIL_DOMAIN}`, role: "FINANCEIRO" as const, cc: 1000 },
+    { name: "Bruno Comercial", email: `comercial@${EMAIL_DOMAIN}`, role: "COMERCIAL" as const, cc: 2000 },
+    { name: "Carla Marketing", email: `marketing@${EMAIL_DOMAIN}`, role: "MARKETING" as const, cc: 3000 },
+    { name: "Diego TI", email: `ti@${EMAIL_DOMAIN}`, role: "TI" as const, cc: 4000 },
+    { name: "Elaine Jurídico", email: `juridico@${EMAIL_DOMAIN}`, role: "JURIDICO" as const, cc: 5000 },
+    { name: "Felipe BDR", email: `bdr@${EMAIL_DOMAIN}`, role: "BDR" as const, cc: 2000 },
   ];
   const users: Record<string, string> = {};
   for (const u of usersData) {
@@ -445,7 +449,7 @@ async function main() {
   });
 
   console.log("✅ Seed concluído com sucesso.");
-  console.log("   Login: admin@chronostek.com.br (senha = SEED_ADMIN_PASSWORD)");
+  console.log(`   Login: admin@${EMAIL_DOMAIN} (senha = SEED_ADMIN_PASSWORD)`);
 }
 
 main()

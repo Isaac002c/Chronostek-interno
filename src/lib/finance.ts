@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { monthLabel } from "@/lib/format";
+import type { FinancialType, FinancialStatus, Prisma } from "@prisma/client";
 
 export type CategoryAmount = { label: string; valor: number };
 export type CostCenterResult = {
@@ -147,6 +148,134 @@ export async function getDre(month: number, year: number) {
     totalReceita,
     totalDespesa,
     resultado: totalReceita - totalDespesa,
+  };
+}
+
+// ─────────────── Contas a Pagar / Receber (visões sobre FinancialEntry) ───────────────
+
+export type AccountRow = {
+  id: string;
+  description: string;
+  value: number;
+  dueDate: Date | null;
+  paymentDate: Date | null;
+  status: FinancialStatus;
+  recurring: boolean;
+  installmentNumber: number | null;
+  installments: number | null;
+  categoryLabel: string | null;
+  costCenterLabel: string | null;
+  partyLabel: string | null;
+  daysOverdue: number;
+};
+
+export type AccountsData = {
+  rows: AccountRow[];
+  kpis: {
+    aberto: number; // total em aberto (pendente + atrasado)
+    vencido: number; // em aberto com vencimento passado
+    aVencer: number; // em aberto com vencimento futuro/sem data
+    liquidadoMes: number; // pago/recebido no mês de referência
+    recorrenteMensal: number; // soma de itens recorrentes em aberto
+  };
+  aging: { label: string; valor: number }[];
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Visão de contas a pagar (DESPESA) ou receber (RECEITA) sobre FinancialEntry.
+ * Centraliza KPIs, aging (faixas de atraso) e a lista, com dias de atraso.
+ */
+export async function getAccounts(
+  type: FinancialType,
+  opts: { status?: string; q?: string; ref?: Date } = {},
+): Promise<AccountsData> {
+  const ref = opts.ref ?? new Date();
+  const month = ref.getMonth() + 1;
+  const year = ref.getFullYear();
+
+  const where: Prisma.FinancialEntryWhereInput = { deletedAt: null, type };
+  if (opts.status && ["PENDENTE", "PAGO", "ATRASADO", "CANCELADO"].includes(opts.status)) {
+    where.status = opts.status as FinancialStatus;
+  }
+  if (opts.q) where.description = { contains: opts.q, mode: "insensitive" };
+
+  const [entries, liquidadoAgg] = await Promise.all([
+    prisma.financialEntry.findMany({
+      where,
+      include: {
+        category: { select: { code: true, name: true } },
+        costCenter: { select: { code: true, name: true } },
+        client: { select: { name: true } },
+        contract: { select: { title: true } },
+      },
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      take: 300,
+    }),
+    prisma.financialEntry.aggregate({
+      _sum: { value: true },
+      where: {
+        deletedAt: null,
+        type,
+        status: "PAGO",
+        competenceMonth: month,
+        competenceYear: year,
+      },
+    }),
+  ]);
+
+  const rows: AccountRow[] = entries.map((e) => {
+    const overdue =
+      e.dueDate && e.status !== "PAGO" && e.status !== "CANCELADO" && e.dueDate < ref
+        ? Math.floor((ref.getTime() - e.dueDate.getTime()) / DAY_MS)
+        : 0;
+    return {
+      id: e.id,
+      description: e.description,
+      value: e.value,
+      dueDate: e.dueDate,
+      paymentDate: e.paymentDate,
+      status: e.status,
+      recurring: e.recurring,
+      installmentNumber: e.installmentNumber,
+      installments: e.installments,
+      categoryLabel: e.category ? `${e.category.code} ${e.category.name}` : null,
+      costCenterLabel: e.costCenter ? `${e.costCenter.code} · ${e.costCenter.name}` : null,
+      partyLabel: e.client?.name ?? e.contract?.title ?? null,
+      daysOverdue: overdue,
+    };
+  });
+
+  const open = rows.filter((r) => r.status === "PENDENTE" || r.status === "ATRASADO");
+  const aberto = open.reduce((s, r) => s + r.value, 0);
+  const vencido = open.filter((r) => r.daysOverdue > 0).reduce((s, r) => s + r.value, 0);
+  const aVencer = aberto - vencido;
+  const recorrenteMensal = open.filter((r) => r.recurring).reduce((s, r) => s + r.value, 0);
+
+  // Aging por faixas.
+  const buckets = [
+    { label: "A vencer", test: (d: number) => d <= 0 },
+    { label: "1–15 dias", test: (d: number) => d >= 1 && d <= 15 },
+    { label: "16–30 dias", test: (d: number) => d >= 16 && d <= 30 },
+    { label: "31–60 dias", test: (d: number) => d >= 31 && d <= 60 },
+    { label: "60+ dias", test: (d: number) => d > 60 },
+  ];
+  const aging = buckets.map((b) => ({
+    label: b.label,
+    valor: open.filter((r) => b.test(r.daysOverdue)).reduce((s, r) => s + r.value, 0),
+  }));
+
+  return {
+    rows,
+    kpis: {
+      aberto,
+      vencido,
+      aVencer,
+      liquidadoMes: liquidadoAgg._sum.value ?? 0,
+      recorrenteMensal,
+    },
+    aging,
   };
 }
 

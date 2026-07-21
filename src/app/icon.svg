@@ -1,0 +1,22 @@
+<svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="telun-fan" x1="8" y1="42" x2="40" y2="8" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="0.5" stop-color="#A56BFF"/>
+      <stop offset="1" stop-color="#FF8A3D"/>
+    </linearGradient>
+    <linearGradient id="telun-beam" x1="24" y1="8" x2="24" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD8A6"/>
+      <stop offset="1" stop-color="#A56BFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="11" fill="#0B0B12"/>
+  <g stroke="url(#telun-fan)" stroke-width="2.2" stroke-linecap="round" fill="none">
+    <path d="M24 40 Q 10 32 12.5 18"/>
+    <path d="M24 40 Q 38 32 35.5 18"/>
+    <path d="M24 40 Q 17 27 19.5 13"/>
+    <path d="M24 40 Q 31 27 28.5 13"/>
+  </g>
+  <path d="M24 40 L24 9" stroke="url(#telun-beam)" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="24" cy="8.5" r="1.8" fill="#FFD8A6"/>
+</svg>

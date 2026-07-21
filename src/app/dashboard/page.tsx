@@ -13,6 +13,7 @@ import {
   Target,
 } from "lucide-react";
 import { requireUser } from "@/lib/session";
+import { BRAND } from "@/lib/brand";
 import { getDashboardData } from "@/lib/metrics";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
@@ -42,7 +43,7 @@ export default async function DashboardPage() {
     <>
       <PageHeader
         title={`Olá, ${user.name.split(" ")[0]} 👋`}
-        description={`Visão geral da Chronostek · ${periodo}`}
+        description={`Visão geral da ${BRAND.name} · ${periodo}`}
       />
 
       {/* KPIs */}

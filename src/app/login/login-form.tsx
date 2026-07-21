@@ -7,6 +7,7 @@ import { Loader2, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BRAND } from "@/lib/brand";
 
 export function LoginForm() {
   const router = useRouter();
@@ -49,7 +50,7 @@ export function LoginForm() {
           type="email"
           autoComplete="email"
           required
-          placeholder="voce@chronostek.com.br"
+          placeholder={`voce@${BRAND.emailDomain}`}
         />
       </div>
 

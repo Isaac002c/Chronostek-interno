@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { LoginForm } from "./login-form";
+import { TelunMark, TelunWordmark } from "@/components/brand";
+import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
   title: "Entrar",
@@ -8,47 +10,39 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
-      {/* Painel de marca */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-sidebar p-12 text-sidebar-foreground lg:flex">
-        <div className="absolute -right-24 -top-24 size-96 rounded-full bg-cyan-500/20 blur-3xl" />
-        <div className="absolute -bottom-24 -left-24 size-96 rounded-full bg-sky-500/10 blur-3xl" />
-
+      {/* Painel de marca — força visual cósmica */}
+      <div className="bg-cosmic relative hidden flex-col justify-between overflow-hidden p-12 text-sidebar-foreground lg:flex">
         <div className="relative flex items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-sky-400 to-cyan-500 text-lg font-bold text-white shadow-lg">
-            C
-          </div>
-          <span className="text-xl font-semibold tracking-tight">
-            Chronos<span className="text-sidebar-accent">tek</span>
-          </span>
+          <TelunMark className="size-11" />
+          <TelunWordmark className="text-2xl text-sidebar-foreground" />
         </div>
 
         <div className="relative space-y-4">
-          <h1 className="text-3xl font-semibold leading-tight">
-            Centro operacional da Chronostek.
+          <h1 className="max-w-md text-4xl font-semibold leading-tight">
+            Tecnologia com <span className="text-gradient-brand">propósito</span>.
+            Luz para conectar o futuro.
           </h1>
           <p className="max-w-md text-sidebar-foreground/70">
-            Financeiro, comercial, marketing, inovação, jurídico, metas e
-            tarefas — tudo num só lugar, com dados reais e visão em tempo real.
+            Financeiro, comercial, projetos e tecnologia, marketing, jurídico,
+            metas e tarefas — tudo num só lugar, com dados reais e visão em tempo
+            real.
+          </p>
+          <p className="text-sm uppercase tracking-[0.2em] text-sidebar-foreground/40">
+            {BRAND.motto}
           </p>
         </div>
 
         <p className="relative text-sm text-sidebar-foreground/40">
-          © {new Date().getFullYear()} Chronostek · Sistema Interno
+          © {new Date().getFullYear()} {BRAND.name} · {BRAND.tagline}
         </p>
       </div>
 
       {/* Formulário */}
-      <div className="flex items-center justify-center p-6 sm:p-12">
+      <div className="flex items-center justify-center bg-background p-6 sm:p-12">
         <div className="w-full max-w-sm space-y-8">
-          <div className="space-y-2 lg:hidden">
-            <div className="flex items-center gap-2.5">
-              <div className="grid size-9 place-items-center rounded-lg bg-gradient-to-br from-sky-400 to-cyan-500 font-bold text-white">
-                C
-              </div>
-              <span className="text-lg font-semibold tracking-tight">
-                Chronos<span className="text-primary">tek</span>
-              </span>
-            </div>
+          <div className="flex items-center gap-2.5 lg:hidden">
+            <TelunMark className="size-9" />
+            <TelunWordmark className="text-lg text-foreground" />
           </div>
 
           <div className="space-y-1.5">

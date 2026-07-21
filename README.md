@@ -1,6 +1,8 @@
-# Chronostek · Sistema Interno
+# Telun · Sistema Interno
 
-CRM/ERP modular interno da Chronostek com **gestão por Centro de Custo** — financeiro, comercial, marketing, inovação/TI, jurídico, metas e tarefas em um único painel, com orçamento, real×orçado, dados reais, RBAC e dashboards.
+Plataforma interna modular da **Telun** com **gestão por Centro de Custo** — financeiro, comercial, projetos e tecnologia, marketing, jurídico, metas e tarefas em um único painel, com orçamento, real×orçado, dados reais, RBAC e dashboards.
+
+> **Rebranding:** o produto foi renomeado de Chronostek para **Telun**. A marca exibida é sempre Telun; razão social e nome fantasia são dados jurídicos configuráveis. O **nome do banco de dados** permanece `chronostek` de propósito, para preservar os dados existentes (renomear exigiria dump+restore).
 
 Stack: **Next.js 15 (App Router) · TypeScript · Prisma · PostgreSQL · Tailwind · Auth.js v5 · Zod · Recharts**.
 
@@ -9,10 +11,10 @@ Stack: **Next.js 15 (App Router) · TypeScript · Prisma · PostgreSQL · Tailwi
 O projeto já vem com `Dockerfile` + `docker-compose.yml` (Postgres **interno**, sem expor porta; só o app na 8080) e `deploy/remote-setup.sh`. Para publicar na VPS (chave SSH já provisionada):
 
 ```powershell
-$src="<CAMINHO_DO_PROJETO>"; $key="<SUA_CHAVE_SSH>"; $vps="root@<VPS_IP>"; $tgz="$env:TEMP\chrono.tgz"
+$src="<CAMINHO_DO_PROJETO>"; $key="<SUA_CHAVE_SSH>"; $vps="root@<VPS_IP>"; $tgz="$env:TEMP\telun.tgz"
 tar -czf $tgz -C $src --exclude=node_modules --exclude=.next --exclude=.git --exclude=.vercel --exclude=.env .
-scp -i $key -o StrictHostKeyChecking=accept-new $tgz "${vps}:/tmp/chrono.tgz"
-ssh -i $key -o StrictHostKeyChecking=accept-new $vps "rm -rf /opt/chronostek && mkdir -p /opt/chronostek && tar -xzf /tmp/chrono.tgz -C /opt/chronostek && bash /opt/chronostek/deploy/remote-setup.sh && ufw allow 8080/tcp"
+scp -i $key -o StrictHostKeyChecking=accept-new $tgz "${vps}:/tmp/telun.tgz"
+ssh -i $key -o StrictHostKeyChecking=accept-new $vps "rm -rf /opt/telun && mkdir -p /opt/telun && tar -xzf /tmp/telun.tgz -C /opt/telun && bash /opt/telun/deploy/remote-setup.sh && ufw allow 8080/tcp"
 ```
 
 Acesso: **http://<VPS_IP>:8080**. As credenciais iniciais são geradas pelo seed (veja a seção 5).
@@ -37,7 +39,7 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST/DB?sslmode=require"
 AUTH_SECRET="um-segredo-forte-aqui"
 
 # Opcional em produção:
-# AUTH_URL="https://interno.chronostek.com.br"
+# AUTH_URL="https://interno.telun.com.br"
 ```
 
 ## 3. Rodar localmente
@@ -68,7 +70,7 @@ npm start
 
 ## 5. Credenciais de acesso (seed)
 
-O seed cria 8 usuários, um por perfil: `SUPER_ADMIN`, `SOCIO_ADMIN`, `FINANCEIRO`, `COMERCIAL`, `MARKETING`, `TI`, `JURIDICO`, `BDR` (e-mails `*@chronostek.com.br`). A senha inicial de todos vem da variável de ambiente **`SEED_ADMIN_PASSWORD`** — defina-a antes de rodar `npm run db:seed`.
+O seed cria 8 usuários, um por perfil: `SUPER_ADMIN`, `SOCIO_ADMIN`, `FINANCEIRO`, `COMERCIAL`, `MARKETING`, `TI`, `JURIDICO`, `BDR` (e-mails `*@telun.com.br`, ou o domínio definido em **`SEED_EMAIL_DOMAIN`**). A senha inicial de todos vem da variável de ambiente **`SEED_ADMIN_PASSWORD`** — defina-a antes de rodar `npm run db:seed`.
 
 > ⚠️ Defina `SEED_ADMIN_PASSWORD` e troque as senhas após o primeiro acesso.
 

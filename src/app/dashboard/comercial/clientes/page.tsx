@@ -3,6 +3,7 @@ import { Plus, Pencil, Search, Filter, Briefcase } from "lucide-react";
 import { Prisma, ClientStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
+import { BRAND } from "@/lib/brand";
 import { canWrite } from "@/lib/rbac";
 import { formatDate } from "@/lib/format";
 import {
@@ -68,7 +69,7 @@ export default async function ClientesPage({
 
   return (
     <>
-      <PageHeader title="Clientes" description="Carteira de clientes e prospects da Chronostek.">
+      <PageHeader title="Clientes" description={`Carteira de clientes e prospects da ${BRAND.name}.`}>
         {writable && (
           <Button asChild>
             <Link href="/dashboard/comercial/clientes/new">
