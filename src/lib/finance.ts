@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { monthLabel } from "@/lib/format";
-import type { FinancialType, FinancialStatus, Prisma } from "@prisma/client";
+import { dreGroupFallback } from "@/lib/finance-rules";
+import type { FinancialType, FinancialStatus, DreGroup, Prisma } from "@prisma/client";
 
 export type CategoryAmount = { label: string; valor: number };
 export type CostCenterResult = {
@@ -277,6 +278,85 @@ export async function getAccounts(
     },
     aging,
   };
+}
+
+// ─────────────── DRE gerencial estruturada (por dreGroup) ───────────────
+
+export type ManagerialDreRow = {
+  key: string;
+  label: string;
+  value: number;
+  /** subtotal/resultado (negrito) vs. linha comum. */
+  emphasis?: boolean;
+};
+
+/**
+ * DRE gerencial por competência, estruturada em linhas (receita bruta →
+ * deduções → receita líquida → custos → margem bruta → despesas por área →
+ * resultado operacional → resultado financeiro → resultado líquido).
+ * Usa o dreGroup da categoria (com fallback pelo tipo).
+ */
+export async function getManagerialDre(month: number, year: number) {
+  const [entryGroups, categories] = await Promise.all([
+    prisma.financialEntry.groupBy({
+      by: ["categoryId", "type"],
+      _sum: { value: true },
+      where: {
+        deletedAt: null,
+        competenceMonth: month,
+        competenceYear: year,
+        status: { not: "CANCELADO" },
+      },
+    }),
+    prisma.financialCategory.findMany({ select: { id: true, dreGroup: true, type: true } }),
+  ]);
+
+  const catMap = new Map(categories.map((c) => [c.id, c]));
+  const g: Partial<Record<DreGroup, number>> = {};
+  for (const row of entryGroups) {
+    const cat = row.categoryId ? catMap.get(row.categoryId) : null;
+    const group = dreGroupFallback(cat?.type ?? row.type, cat?.dreGroup ?? null);
+    g[group] = (g[group] ?? 0) + (row._sum.value ?? 0);
+  }
+  const V = (k: DreGroup) => g[k] ?? 0;
+
+  const receitaBruta = V("RECEITA_BRUTA");
+  const deducoes = V("DEDUCOES");
+  const receitaLiquida = receitaBruta - deducoes;
+  const custosDiretos = V("CUSTOS_DIRETOS");
+  const margemBruta = receitaLiquida - custosDiretos;
+  const despComerciais = V("DESPESAS_COMERCIAIS");
+  const despMarketing = V("DESPESAS_MARKETING");
+  const despTecnologia = V("DESPESAS_TECNOLOGIA");
+  const despAdmin = V("DESPESAS_ADMINISTRATIVAS");
+  const despPessoas = V("DESPESAS_PESSOAS");
+  const outros = V("OUTROS");
+  const despesasOperacionais =
+    despComerciais + despMarketing + despTecnologia + despAdmin + despPessoas + outros;
+  const resultadoOperacional = margemBruta - despesasOperacionais;
+  const resultadoFinanceiro = -V("DESPESAS_FINANCEIRAS");
+  const investimentos = V("INVESTIMENTOS");
+  const resultadoLiquido = resultadoOperacional + resultadoFinanceiro - investimentos;
+
+  const rows: ManagerialDreRow[] = [
+    { key: "rb", label: "Receita bruta", value: receitaBruta },
+    { key: "ded", label: "(−) Deduções da receita", value: -deducoes },
+    { key: "rl", label: "= Receita líquida", value: receitaLiquida, emphasis: true },
+    { key: "cd", label: "(−) Custos diretos", value: -custosDiretos },
+    { key: "mb", label: "= Margem bruta", value: margemBruta, emphasis: true },
+    { key: "dcom", label: "(−) Despesas comerciais", value: -despComerciais },
+    { key: "dmkt", label: "(−) Despesas de marketing", value: -despMarketing },
+    { key: "dtec", label: "(−) Despesas de tecnologia", value: -despTecnologia },
+    { key: "dadm", label: "(−) Despesas administrativas", value: -despAdmin },
+    { key: "dpes", label: "(−) Despesas com pessoas", value: -despPessoas },
+    ...(outros ? [{ key: "outros", label: "(−) Outras despesas", value: -outros }] : []),
+    { key: "ro", label: "= Resultado operacional", value: resultadoOperacional, emphasis: true },
+    { key: "rf", label: "(±) Resultado financeiro", value: resultadoFinanceiro },
+    ...(investimentos ? [{ key: "inv", label: "(−) Investimentos", value: -investimentos }] : []),
+    { key: "rlq", label: "= Resultado líquido gerencial", value: resultadoLiquido, emphasis: true },
+  ];
+
+  return { rows, receitaBruta, receitaLiquida, margemBruta, resultadoOperacional, resultadoLiquido };
 }
 
 export type CashFlowPoint = {
