@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import { FinancialType, FinancialStatus, PaymentMethod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { maybeRequestExpenseApproval } from "@/lib/approvals";
+import { writeAudit } from "@/lib/audit";
+import { isCompetenceClosed } from "@/lib/closing";
 import {
   requireWrite,
   zodFieldErrors,
@@ -75,13 +77,25 @@ export async function createEntry(
   const parsed = entrySchema.safeParse(parseEntry(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
 
+  if (await isCompetenceClosed(parsed.data.competenceMonth, parsed.data.competenceYear))
+    return { error: "Mês fechado. Reabra o período para lançar nesta competência." };
+
   try {
-    const entry = await prisma.financialEntry.create({ data: parsed.data });
+    const entry = await prisma.financialEntry.create({
+      data: { ...parsed.data, createdById: auth.user.id, responsibleId: auth.user.id },
+    });
     await maybeRequestExpenseApproval({
       entryId: entry.id,
       type: parsed.data.type,
       value: parsed.data.value,
       requestedById: auth.user.id,
+    });
+    await writeAudit({
+      userId: auth.user.id,
+      action: "create",
+      entity: "FinancialEntry",
+      entityId: entry.id,
+      after: parsed.data,
     });
   } catch {
     return { error: "Não foi possível salvar o lançamento." };
@@ -103,8 +117,20 @@ export async function updateEntry(
   const parsed = entrySchema.safeParse(parseEntry(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
 
+  if (await isCompetenceClosed(parsed.data.competenceMonth, parsed.data.competenceYear))
+    return { error: "Mês fechado. Reabra o período para editar lançamentos desta competência." };
+
   try {
+    const before = await prisma.financialEntry.findUnique({ where: { id } });
     await prisma.financialEntry.update({ where: { id }, data: parsed.data });
+    await writeAudit({
+      userId: auth.user.id,
+      action: "update",
+      entity: "FinancialEntry",
+      entityId: id,
+      before,
+      after: parsed.data,
+    });
   } catch {
     return { error: "Não foi possível atualizar o lançamento." };
   }
@@ -119,9 +145,17 @@ export async function deleteEntry(id: string): Promise<ActionState> {
   if ("error" in auth) return auth;
 
   try {
+    const before = await prisma.financialEntry.findUnique({ where: { id } });
     await prisma.financialEntry.update({
       where: { id },
       data: { deletedAt: new Date() },
+    });
+    await writeAudit({
+      userId: auth.user.id,
+      action: "delete",
+      entity: "FinancialEntry",
+      entityId: id,
+      before,
     });
   } catch {
     return { error: "Não foi possível excluir o lançamento." };
@@ -138,13 +172,29 @@ export async function markEntryPaid(id: string): Promise<ActionState> {
   if ("error" in auth) return auth;
 
   try {
+    const before = await prisma.financialEntry.findUnique({ where: { id } });
     await prisma.financialEntry.update({
       where: { id },
-      data: { status: "PAGO", paymentDate: new Date() },
+      data: {
+        status: "PAGO",
+        paymentDate: new Date(),
+        paidValue: before?.value ?? undefined,
+        approvedById: auth.user.id,
+      },
+    });
+    await writeAudit({
+      userId: auth.user.id,
+      action: "pay",
+      entity: "FinancialEntry",
+      entityId: id,
+      before,
+      reason: "Baixa (marcado como pago/recebido)",
     });
   } catch {
     return { error: "Não foi possível baixar o lançamento." };
   }
+  revalidatePath("/dashboard/financeiro/contas-pagar");
+  revalidatePath("/dashboard/financeiro/contas-receber");
 
   revalidatePath("/dashboard/financeiro/lancamentos");
   revalidatePath("/dashboard/financeiro");

@@ -128,10 +128,53 @@ enum FinancialType {
 }
 
 enum FinancialStatus {
+  PREVISTO
   PENDENTE
   PAGO
+  PARCIAL
   ATRASADO
+  RENEGOCIADO
   CANCELADO
+}
+
+enum BankAccountType {
+  CORRENTE
+  POUPANCA
+  CAIXA
+  INVESTIMENTO
+  OUTRO
+}
+
+enum RecurringFrequency {
+  MENSAL
+  BIMESTRAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
+enum MonthlyClosingStatus {
+  ABERTO
+  EM_REVISAO
+  FECHADO
+  REABERTO
+}
+
+/**
+ * Linha da DRE gerencial para agrupar categorias do plano de contas.
+ */
+enum DreGroup {
+  RECEITA_BRUTA
+  DEDUCOES
+  CUSTOS_DIRETOS
+  DESPESAS_COMERCIAIS
+  DESPESAS_MARKETING
+  DESPESAS_TECNOLOGIA
+  DESPESAS_ADMINISTRATIVAS
+  DESPESAS_PESSOAS
+  DESPESAS_FINANCEIRAS
+  INVESTIMENTOS
+  OUTROS
 }
 
 enum PaymentMethod {
@@ -396,7 +439,9 @@ enum PlanningPeriodStatus {
   CANCELADO
 }
 
-/** Unidade de contribuição de um checklist/tarefa para uma meta. */
+/**
+ * Unidade de contribuição de um checklist/tarefa para uma meta.
+ */
 enum ContributionUnit {
   PERCENTUAL
   QUANTIDADE
@@ -409,7 +454,9 @@ enum ContributionUnit {
   OUTRO
 }
 
-/** Como uma meta é dividida entre responsáveis (sem duplicidade de contabilização). */
+/**
+ * Como uma meta é dividida entre responsáveis (sem duplicidade de contabilização).
+ */
 enum GoalDistributionType {
   VALOR_FIXO
   PERCENTUAL
@@ -495,6 +542,16 @@ model User {
   approvalsResponded     ApprovalRequest[] @relation("ApprovalApprover")
   auditLogs              AuditLog[]
 
+  financialCreated     FinancialEntry[]       @relation("FinancialCreatedBy")
+  financialResponsible FinancialEntry[]       @relation("FinancialResponsible")
+  financialApproved    FinancialEntry[]       @relation("FinancialApprovedBy")
+  recurringCreated     RecurringEntry[]       @relation("RecurringCreatedBy")
+  closingsClosed       MonthlyClosing[]       @relation("ClosingClosedBy")
+  closingsReopened     MonthlyClosing[]       @relation("ClosingReopenedBy")
+  attachmentsUploaded  Attachment[]           @relation("AttachmentUploadedBy")
+  reconciliations      Reconciliation[]       @relation("ReconciledBy")
+  orgSettingsUpdated   OrganizationSettings[] @relation("OrgSettingsUpdatedBy")
+
   @@index([role])
   @@index([status])
 }
@@ -533,6 +590,8 @@ model CostCenter {
   legalDocuments      LegalDocument[]
   legalDemands        LegalDemand[]
   legalRisks          LegalRisk[]
+  recurringEntries    RecurringEntry[]
+  approvalRules       ApprovalRule[]      @relation("ApprovalRuleCostCenter")
 
   @@index([active])
   @@index([type])
@@ -544,16 +603,25 @@ model FinancialCategory {
   name         String
   type         CategoryType
   costCenterId String?
+  parentId     String? // plano de contas hierárquico (grupo → subgrupo → conta)
+  dreGroup     DreGroup? // mapeia a conta para a linha da DRE gerencial
+  order        Int          @default(0)
   active       Boolean      @default(true)
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  costCenter       CostCenter?      @relation("CategoryCostCenter", fields: [costCenterId], references: [id])
+  costCenter       CostCenter?         @relation("CategoryCostCenter", fields: [costCenterId], references: [id])
+  parent           FinancialCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children         FinancialCategory[] @relation("CategoryHierarchy")
   financialEntries FinancialEntry[]
   contracts        Contract[]
   budgetLines      BudgetLine[]
+  recurringEntries RecurringEntry[]
+  approvalRules    ApprovalRule[]      @relation("ApprovalRuleCategory")
 
   @@index([type])
+  @@index([parentId])
+  @@index([dreGroup])
 }
 
 // ─────────────────────────────── ORÇAMENTO ───────────────────────────────
@@ -707,6 +775,7 @@ model Client {
   legalContracts      LegalContract[]
   legalDocuments      LegalDocument[]
   legalDemands        LegalDemand[]
+  recurringEntries    RecurringEntry[]
   tasks               Task[]           @relation("ClientTasks")
 
   @@index([status])
@@ -757,6 +826,7 @@ model Contract {
   category         FinancialCategory? @relation(fields: [categoryId], references: [id])
   financialEntries FinancialEntry[]
   projects         Project[]
+  recurringEntries RecurringEntry[]
   tasks            Task[]             @relation("ContractTasks")
 
   @@index([status])
@@ -770,7 +840,8 @@ model FinancialEntry {
   id                String          @id @default(cuid())
   description       String
   type              FinancialType
-  value             Float           @default(0)
+  value             Float           @default(0) // valor previsto/principal
+  paidValue         Float? // valor realizado (pago/recebido, inclui parciais)
   dueDate           DateTime?
   paymentDate       DateTime?
   competenceMonth   Int // 1-12
@@ -782,22 +853,34 @@ model FinancialEntry {
   contractId        String?
   projectId         String?
   campaignId        String?
+  supplierId        String?
+  bankAccountId     String?
+  recurringEntryId  String?
   recurring         Boolean         @default(false)
   installments      Int?
   installmentNumber Int?
   paymentMethod     PaymentMethod?
+  createdById       String?
+  responsibleId     String?
+  approvedById      String?
   notes             String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   deletedAt         DateTime?
 
-  costCenter CostCenter?        @relation(fields: [costCenterId], references: [id])
-  category   FinancialCategory? @relation(fields: [categoryId], references: [id])
-  client     Client?            @relation(fields: [clientId], references: [id])
-  contract   Contract?          @relation(fields: [contractId], references: [id])
-  project    Project?           @relation(fields: [projectId], references: [id])
-  campaign   MarketingCampaign? @relation(fields: [campaignId], references: [id])
-  tasks      Task[]             @relation("FinancialTasks")
+  costCenter     CostCenter?        @relation(fields: [costCenterId], references: [id])
+  category       FinancialCategory? @relation(fields: [categoryId], references: [id])
+  client         Client?            @relation(fields: [clientId], references: [id])
+  contract       Contract?          @relation(fields: [contractId], references: [id])
+  project        Project?           @relation(fields: [projectId], references: [id])
+  campaign       MarketingCampaign? @relation(fields: [campaignId], references: [id])
+  supplier       Supplier?          @relation(fields: [supplierId], references: [id])
+  bankAccount    BankAccount?       @relation(fields: [bankAccountId], references: [id])
+  recurringEntry RecurringEntry?    @relation(fields: [recurringEntryId], references: [id])
+  createdBy      User?              @relation("FinancialCreatedBy", fields: [createdById], references: [id])
+  responsible    User?              @relation("FinancialResponsible", fields: [responsibleId], references: [id])
+  approvedBy     User?              @relation("FinancialApprovedBy", fields: [approvedById], references: [id])
+  tasks          Task[]             @relation("FinancialTasks")
 
   @@index([type])
   @@index([status])
@@ -805,6 +888,9 @@ model FinancialEntry {
   @@index([dueDate])
   @@index([costCenterId])
   @@index([categoryId])
+  @@index([supplierId])
+  @@index([bankAccountId])
+  @@index([recurringEntryId])
 }
 
 // ─────────────────────────────── INOVAÇÃO / TI ───────────────────────────────
@@ -1195,7 +1281,9 @@ model PlanningPeriod {
   @@index([startDate, endDate])
 }
 
-/** Feriado / dia não útil (nacional cadastrado ou marcação manual). */
+/**
+ * Feriado / dia não útil (nacional cadastrado ou marcação manual).
+ */
 model Holiday {
   id        String   @id @default(cuid())
   date      DateTime @unique
@@ -1232,13 +1320,13 @@ model Task {
   deletedAt      DateTime?
 
   // Checklist / contribuição para meta (alimenta o progresso da meta vinculada)
-  planningPeriodId    String?
-  contributionUnit    ContributionUnit?
-  plannedContribution Float?
+  planningPeriodId     String?
+  contributionUnit     ContributionUnit?
+  plannedContribution  Float?
   realizedContribution Float?
-  contributionWeight  Float?
-  evidenceUrl         String?
-  evidenceNote        String?
+  contributionWeight   Float?
+  evidenceUrl          String?
+  evidenceNote         String?
 
   // Vínculos polimórficos opcionais
   leadId           String?
@@ -1250,19 +1338,19 @@ model Task {
   legalContractId  String?
   financialEntryId String?
 
-  assignee       User?              @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  createdBy      User?              @relation("TaskCreatedBy", fields: [createdById], references: [id])
-  costCenter     CostCenter?        @relation(fields: [costCenterId], references: [id])
-  planningPeriod PlanningPeriod?    @relation(fields: [planningPeriodId], references: [id])
-  lead           Lead?              @relation("LeadTasks", fields: [leadId], references: [id])
-  client         Client?            @relation("ClientTasks", fields: [clientId], references: [id])
-  contract       Contract?          @relation("ContractTasks", fields: [contractId], references: [id])
-  project        Project?           @relation("ProjectTasks", fields: [projectId], references: [id])
-  campaign       MarketingCampaign? @relation("CampaignTasks", fields: [campaignId], references: [id])
-  goal           Goal?              @relation("GoalTasks", fields: [goalId], references: [id])
+  assignee          User?              @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdBy         User?              @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  costCenter        CostCenter?        @relation(fields: [costCenterId], references: [id])
+  planningPeriod    PlanningPeriod?    @relation(fields: [planningPeriodId], references: [id])
+  lead              Lead?              @relation("LeadTasks", fields: [leadId], references: [id])
+  client            Client?            @relation("ClientTasks", fields: [clientId], references: [id])
+  contract          Contract?          @relation("ContractTasks", fields: [contractId], references: [id])
+  project           Project?           @relation("ProjectTasks", fields: [projectId], references: [id])
+  campaign          MarketingCampaign? @relation("CampaignTasks", fields: [campaignId], references: [id])
+  goal              Goal?              @relation("GoalTasks", fields: [goalId], references: [id])
   goalContributions GoalContribution[]
-  legalContract  LegalContract?     @relation("LegalTasks", fields: [legalContractId], references: [id])
-  financialEntry FinancialEntry?    @relation("FinancialTasks", fields: [financialEntryId], references: [id])
+  legalContract     LegalContract?     @relation("LegalTasks", fields: [legalContractId], references: [id])
+  financialEntry    FinancialEntry?    @relation("FinancialTasks", fields: [financialEntryId], references: [id])
 
   @@index([status])
   @@index([priority])
@@ -1282,11 +1370,205 @@ model AuditLog {
   action    String
   entity    String
   entityId  String?
-  metadata  Json?
+  metadata  Json? // { before, after, reason, origin, ... }
   createdAt DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
 
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+// ─────────────────────────────── FINANCEIRO (cadastros e controle) ───────────────────────────────
+
+/**
+ * Fornecedor (contas a pagar). Não confundir com Client (comercial).
+ */
+model Supplier {
+  id        String    @id @default(cuid())
+  name      String
+  document  String?
+  email     String?
+  phone     String?
+  notes     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  financialEntries FinancialEntry[]
+  recurringEntries RecurringEntry[]
+
+  @@index([active])
+}
+
+/**
+ * Conta bancária / caixa (saldo e fluxo de caixa).
+ */
+model BankAccount {
+  id             String          @id @default(cuid())
+  name           String
+  bank           String?
+  agency         String?
+  number         String?
+  type           BankAccountType @default(CORRENTE)
+  initialBalance Float           @default(0)
+  active         Boolean         @default(true)
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  financialEntries FinancialEntry[]
+  reconciliations  Reconciliation[]
+
+  @@index([active])
+}
+
+/**
+ * Modelo de recorrência: gera lançamentos financeiros periódicos.
+ */
+model RecurringEntry {
+  id                 String             @id @default(cuid())
+  description        String
+  type               FinancialType
+  value              Float              @default(0)
+  frequency          RecurringFrequency @default(MENSAL)
+  dayOfMonth         Int                @default(1)
+  startDate          DateTime
+  endDate            DateTime?
+  active             Boolean            @default(true)
+  categoryId         String?
+  costCenterId       String?
+  clientId           String?
+  contractId         String?
+  supplierId         String?
+  lastGeneratedYear  Int?
+  lastGeneratedMonth Int?
+  notes              String?
+  createdById        String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+
+  category         FinancialCategory? @relation(fields: [categoryId], references: [id])
+  costCenter       CostCenter?        @relation(fields: [costCenterId], references: [id])
+  client           Client?            @relation(fields: [clientId], references: [id])
+  contract         Contract?          @relation(fields: [contractId], references: [id])
+  supplier         Supplier?          @relation(fields: [supplierId], references: [id])
+  createdBy        User?              @relation("RecurringCreatedBy", fields: [createdById], references: [id])
+  generatedEntries FinancialEntry[]
+
+  @@index([active])
+  @@index([type])
+  @@index([contractId])
+}
+
+/**
+ * Fechamento mensal (bloqueia edições; reabertura auditada).
+ */
+model MonthlyClosing {
+  id           String               @id @default(cuid())
+  month        Int
+  year         Int
+  status       MonthlyClosingStatus @default(ABERTO)
+  checklist    Json? // itens do checklist de fechamento
+  notes        String?
+  closedById   String?
+  closedAt     DateTime?
+  reopenedById String?
+  reopenedAt   DateTime?
+  reopenReason String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  closedBy   User? @relation("ClosingClosedBy", fields: [closedById], references: [id])
+  reopenedBy User? @relation("ClosingReopenedBy", fields: [reopenedById], references: [id])
+
+  @@unique([year, month])
+  @@index([status])
+}
+
+/**
+ * Anexo/comprovante polimórfico (metadados; o arquivo fica em storage externo).
+ */
+model Attachment {
+  id           String   @id @default(cuid())
+  entityType   String
+  entityId     String
+  fileName     String
+  fileUrl      String
+  mimeType     String?
+  size         Int?
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  uploadedBy User? @relation("AttachmentUploadedBy", fields: [uploadedById], references: [id])
+
+  @@index([entityType, entityId])
+}
+
+/**
+ * Conciliação bancária (base para integração futura).
+ */
+model Reconciliation {
+  id               String   @id @default(cuid())
+  bankAccountId    String
+  refDate          DateTime
+  statementBalance Float
+  systemBalance    Float
+  difference       Float    @default(0)
+  reconciled       Boolean  @default(false)
+  notes            String?
+  reconciledById   String?
+  createdAt        DateTime @default(now())
+
+  bankAccount  BankAccount @relation(fields: [bankAccountId], references: [id])
+  reconciledBy User?       @relation("ReconciledBy", fields: [reconciledById], references: [id])
+
+  @@index([bankAccountId])
+}
+
+/**
+ * Regra configurável de aprovação de despesa (sem hard-code no código).
+ */
+model ApprovalRule {
+  id                 String   @id @default(cuid())
+  name               String
+  minAmount          Float    @default(0)
+  maxAmount          Float?
+  costCenterId       String?
+  categoryId         String?
+  requiresUnbudgeted Boolean  @default(false) // aplica-se a despesa não orçada
+  approverRole       Role?
+  requiresPartner    Boolean  @default(false) // exige aprovação de sócio
+  active             Boolean  @default(true)
+  order              Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  costCenter CostCenter?        @relation("ApprovalRuleCostCenter", fields: [costCenterId], references: [id])
+  category   FinancialCategory? @relation("ApprovalRuleCategory", fields: [categoryId], references: [id])
+
+  @@index([active])
+}
+
+/**
+ * Configuração da organização: marca exibida vs. dados jurídicos (singleton).
+ */
+model OrganizationSettings {
+  id          String   @id @default(cuid())
+  brandName   String   @default("Telun")
+  legalName   String?
+  tradeName   String?
+  cnpj        String?
+  email       String?
+  phone       String?
+  address     String?
+  logoUrl     String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  updatedBy User? @relation("OrgSettingsUpdatedBy", fields: [updatedById], references: [id])
 }

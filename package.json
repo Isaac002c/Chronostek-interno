@@ -16,6 +16,7 @@
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
     "test": "tsx scripts/test-metas.ts",
+    "test:finance": "tsx scripts/test-finance.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

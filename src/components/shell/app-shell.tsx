@@ -145,12 +145,7 @@ export function AppShell({
 
         {/* Barra de contexto: breadcrumb + abas do módulo */}
         {activeItem && (
-          <ContextBar
-            activeItem={activeItem}
-            tabs={tabs}
-            activeTab={activeTab}
-            pathname={pathname}
-          />
+          <ContextBar activeItem={activeItem} tabs={tabs} activeTab={activeTab} />
         )}
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
@@ -246,12 +241,10 @@ function ContextBar({
   activeItem,
   tabs,
   activeTab,
-  pathname,
 }: {
   activeItem: NavItem;
   tabs: NavTab[];
   activeTab: NavTab | undefined;
-  pathname: string;
 }) {
   const hasTabs = tabs.length > 1;
   const showBreadcrumb = !activeItem.exact; // não mostra na Início

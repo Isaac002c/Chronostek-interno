@@ -136,18 +136,20 @@ export const MODULE_TABS: Record<string, NavTab[]> = {
     { label: "Propostas", href: "/dashboard/comercial/propostas", module: "COMERCIAL" },
     { label: "Contratos", href: "/dashboard/comercial/contratos", module: "COMERCIAL" },
   ],
-  // As 12 visões internas do Financeiro. As 4 finais (Contratos/Recorrências,
-  // Projeções, Cadastros, Fechamento) são habilitadas conforme suas telas são
-  // construídas nas fases seguintes — evita links órfãos.
+  // As 12 visões internas do Financeiro.
   financeiro: [
     { label: "Visão Geral", href: "/dashboard/financeiro", module: "FINANCEIRO" },
     { label: "Lançamentos", href: "/dashboard/financeiro/lancamentos", module: "FINANCEIRO" },
     { label: "Contas a Pagar", href: "/dashboard/financeiro/contas-pagar", module: "FINANCEIRO" },
     { label: "Contas a Receber", href: "/dashboard/financeiro/contas-receber", module: "FINANCEIRO" },
+    { label: "Contratos e Recorrências", href: "/dashboard/financeiro/contratos", module: "FINANCEIRO" },
     { label: "Orçamentos", href: "/dashboard/financeiro/orcamentos", module: "FINANCEIRO" },
     { label: "Real × Orçado", href: "/dashboard/financeiro/real-x-orcado", module: "FINANCEIRO" },
     { label: "DRE", href: "/dashboard/financeiro/dre", module: "FINANCEIRO" },
     { label: "Fluxo de Caixa", href: "/dashboard/financeiro/fluxo-caixa", module: "FINANCEIRO" },
+    { label: "Projeções", href: "/dashboard/financeiro/projecoes", module: "FINANCEIRO" },
+    { label: "Cadastros", href: "/dashboard/financeiro/cadastros", module: "FINANCEIRO" },
+    { label: "Fechamento", href: "/dashboard/financeiro/fechamento", module: "FINANCEIRO" },
   ],
   projetos: [
     { label: "Projetos", href: "/dashboard/ti/projetos", module: "TI" },
@@ -166,6 +168,7 @@ export const MODULE_TABS: Record<string, NavTab[]> = {
     { label: "Relatórios", href: "/dashboard/metas/relatorios", module: "METAS" },
   ],
   configuracoes: [
+    { label: "Empresa", href: "/dashboard/configuracoes/empresa", module: "CONFIGURACOES" },
     { label: "Usuários", href: "/dashboard/configuracoes/usuarios", module: "CONFIGURACOES" },
     { label: "Centros de Custo", href: "/dashboard/configuracoes/centros-custo", module: "CONFIGURACOES" },
     { label: "Indicadores de Meta", href: "/dashboard/configuracoes/indicadores", module: "CONFIGURACOES" },

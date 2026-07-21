@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -29,7 +30,7 @@ export default function MetasError({
       <div className="flex gap-2">
         <Button onClick={() => reset()}>Tentar novamente</Button>
         <Button asChild variant="outline">
-          <a href="/dashboard/metas">Voltar às metas</a>
+          <Link href="/dashboard/metas">Voltar às metas</Link>
         </Button>
       </div>
     </div>

@@ -42,33 +42,40 @@ async function main() {
 
   // ───────────── Categorias financeiras ─────────────
   const categoriesData = [
-    { code: "1.1", name: "Desenvolvimento", type: "RECEITA" as const },
-    { code: "1.2", name: "Mensalidades", type: "RECEITA" as const },
-    { code: "1.3", name: "Consultoria", type: "RECEITA" as const },
-    { code: "1.4", name: "Gestão de Tráfego", type: "RECEITA" as const },
-    { code: "1.5", name: "Setup/Implantação", type: "RECEITA" as const },
-    { code: "1.6", name: "Automação", type: "RECEITA" as const },
-    { code: "1.7", name: "Hospedagem", type: "RECEITA" as const },
-    { code: "1.8", name: "Suporte", type: "RECEITA" as const },
-    { code: "2.1", name: "Comissão", type: "DESPESA" as const },
-    { code: "2.2", name: "VPS/Cloud", type: "DESPESA" as const },
-    { code: "2.3", name: "APIs", type: "DESPESA" as const },
-    { code: "2.4", name: "Ferramentas", type: "DESPESA" as const },
-    { code: "2.5", name: "Domínios", type: "DESPESA" as const },
-    { code: "2.6", name: "Marketing Interno", type: "DESPESA" as const },
-    { code: "2.7", name: "Contabilidade", type: "DESPESA" as const },
-    { code: "2.8", name: "Jurídico", type: "DESPESA" as const },
-    { code: "2.9", name: "Bancos/Taxas", type: "DESPESA" as const },
-    { code: "2.10", name: "Impostos", type: "DESPESA" as const },
+    { code: "1.1", name: "Desenvolvimento", type: "RECEITA" as const, dreGroup: "RECEITA_BRUTA" as const },
+    { code: "1.2", name: "Mensalidades", type: "RECEITA" as const, dreGroup: "RECEITA_BRUTA" as const },
+    { code: "1.3", name: "Consultoria", type: "RECEITA" as const, dreGroup: "RECEITA_BRUTA" as const },
+    { code: "1.4", name: "Gestão de Tráfego", type: "RECEITA" as const, dreGroup: "RECEITA_BRUTA" as const },
+    { code: "1.5", name: "Setup/Implantação", type: "RECEITA" as const, dreGroup: "RECEITA_BRUTA" as const },
+    { code: "1.6", name: "Automação", type: "RECEITA" as const, dreGroup: "RECEITA_BRUTA" as const },
+    { code: "1.7", name: "Hospedagem", type: "RECEITA" as const, dreGroup: "RECEITA_BRUTA" as const },
+    { code: "1.8", name: "Suporte", type: "RECEITA" as const, dreGroup: "RECEITA_BRUTA" as const },
+    { code: "2.1", name: "Comissão", type: "DESPESA" as const, dreGroup: "DESPESAS_COMERCIAIS" as const },
+    { code: "2.2", name: "VPS/Cloud", type: "DESPESA" as const, dreGroup: "CUSTOS_DIRETOS" as const },
+    { code: "2.3", name: "APIs", type: "DESPESA" as const, dreGroup: "CUSTOS_DIRETOS" as const },
+    { code: "2.4", name: "Ferramentas", type: "DESPESA" as const, dreGroup: "DESPESAS_TECNOLOGIA" as const },
+    { code: "2.5", name: "Domínios", type: "DESPESA" as const, dreGroup: "CUSTOS_DIRETOS" as const },
+    { code: "2.6", name: "Marketing Interno", type: "DESPESA" as const, dreGroup: "DESPESAS_MARKETING" as const },
+    { code: "2.7", name: "Contabilidade", type: "DESPESA" as const, dreGroup: "DESPESAS_ADMINISTRATIVAS" as const },
+    { code: "2.8", name: "Jurídico", type: "DESPESA" as const, dreGroup: "DESPESAS_ADMINISTRATIVAS" as const },
+    { code: "2.9", name: "Bancos/Taxas", type: "DESPESA" as const, dreGroup: "DESPESAS_FINANCEIRAS" as const },
+    { code: "2.10", name: "Impostos", type: "DESPESA" as const, dreGroup: "DEDUCOES" as const },
   ];
   const categories: Record<string, string> = {};
   for (const c of categoriesData) {
     const rec = await prisma.financialCategory.upsert({
       where: { code: c.code },
-      update: { name: c.name, type: c.type },
+      update: { name: c.name, type: c.type, dreGroup: c.dreGroup },
       create: c,
     });
     categories[c.code] = rec.id;
+  }
+
+  // ───────────── Configuração da organização (marca vs. dados jurídicos) ─────────────
+  if (!(await prisma.organizationSettings.findFirst())) {
+    await prisma.organizationSettings.create({
+      data: { brandName: "Telun", legalName: "Telun Tecnologia LTDA", tradeName: "Telun" },
+    });
   }
 
   // ───────────── Usuários ─────────────
