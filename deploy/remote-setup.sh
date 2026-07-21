@@ -25,8 +25,18 @@ for i in $(seq 1 40); do
   sleep 2
 done
 
-echo "== criando schema (prisma db push) =="
-docker compose exec -T web npx prisma db push --skip-generate --accept-data-loss
+echo "== aplicando migrations (prisma migrate deploy) =="
+# Migrations versionadas (corrige o drift de schema que quebrava telas).
+# Banco PRÉ-EXISTENTE (criado por 'db push' antes das migrations) precisa de
+# baseline UMA vez antes do primeiro deploy:
+#   docker compose exec -T web npx prisma migrate resolve --applied 00000000000000_init
+if ! docker compose exec -T web npx prisma migrate deploy; then
+  echo "!! migrate deploy falhou."
+  echo "   Se este banco já existia (criado por db push), rode o baseline UMA vez:"
+  echo "   docker compose exec -T web npx prisma migrate resolve --applied 00000000000000_init"
+  echo "   e execute o deploy novamente."
+  exit 1
+fi
 
 echo "== seed =="
 docker compose exec -T web npx prisma db seed || echo "seed: provavelmente ja populado"

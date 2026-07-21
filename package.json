@@ -10,6 +10,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:baseline": "prisma migrate resolve --applied 00000000000000_init",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",

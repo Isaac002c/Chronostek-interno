@@ -60,10 +60,27 @@ npm start
 
 ## 4. Migrations / Seed
 
+> **Migrations versionadas (correção do drift de schema).** O projeto passou a
+> usar `prisma migrate` em vez de `db push` no deploy. Isso corrige a causa raiz
+> das telas que exibiam "Não foi possível carregar" — colunas novas do schema
+> que não existiam no banco por o deploy nunca ter aplicado as alterações.
+>
+> **Banco NOVO** (vazio): `npm run db:deploy` cria tudo (baseline + migrations).
+>
+> **Banco JÁ EXISTENTE** (criado anteriormente por `db push`): rode o baseline
+> **uma única vez** para o Prisma marcar o schema atual como aplicado, depois siga
+> com `db:deploy`:
+> ```bash
+> npm run db:baseline    # prisma migrate resolve --applied 00000000000000_init
+> npm run db:deploy      # aplica migrations pendentes (ex.: novos models do Financeiro)
+> ```
+
 | Comando | O que faz |
 | --- | --- |
-| `npm run db:push` | Sincroniza o schema com o banco (sem histórico de migration — ideal p/ MVP) |
-| `npm run db:migrate` | Cria uma migration versionada (`prisma migrate dev`) |
+| `npm run db:deploy` | **Produção**: aplica migrations pendentes (`prisma migrate deploy`) |
+| `npm run db:baseline` | Marca o schema atual como aplicado (banco pré-existente, roda 1×) |
+| `npm run db:migrate` | **Dev**: cria uma migration versionada (`prisma migrate dev`) |
+| `npm run db:push` | Sincroniza schema sem histórico (só p/ protótipo local rápido) |
 | `npm run db:seed` | Roda `prisma/seed.ts` (idempotente na parte de referência) |
 | `npm run db:studio` | Abre o Prisma Studio |
 | `npm run db:reset` | **Apaga** o banco e re-aplica migrations + seed |
