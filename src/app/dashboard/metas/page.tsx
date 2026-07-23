@@ -6,7 +6,11 @@ import {
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite, visibleGoalWhere } from "@/lib/rbac";
+import {
+  canManageStrategicGoals,
+  canWrite,
+  visibleGoalWhere,
+} from "@/lib/rbac";
 import { getUserOptions, getCostCenterOptions } from "@/lib/options";
 import { nowSpParts, spDayStart } from "@/lib/tz";
 import { formatDate, monthShort } from "@/lib/format";
@@ -145,7 +149,12 @@ export default async function MetasHomePage() {
       {/* Ações rápidas */}
       {writable && (
         <div className="flex flex-wrap gap-2">
-          {QUICK_ACTIONS.map((a) => (
+          {QUICK_ACTIONS.filter(
+            (action) =>
+              canManageStrategicGoals(user.role) ||
+              (!action.href.includes("ANUAL") &&
+                !action.href.includes("TRIMESTRAL")),
+          ).map((a) => (
             <Button key={a.href} asChild variant="outline" size="sm">
               <Link href={a.href}><Plus className="size-3.5" />{a.label}</Link>
             </Button>

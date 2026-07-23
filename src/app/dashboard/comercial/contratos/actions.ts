@@ -50,7 +50,7 @@ export async function createContract(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   const parsed = contractSchema.safeParse(parseContract(fd));
@@ -71,7 +71,7 @@ export async function updateContract(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   const parsed = contractSchema.safeParse(parseContract(fd));
@@ -88,7 +88,7 @@ export async function updateContract(
 }
 
 export async function deleteContract(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   try {

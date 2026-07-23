@@ -67,6 +67,36 @@ export function canManageStrategicGoals(role: Role): boolean {
   return isAdmin(role);
 }
 
+export type GoalAccessRecord = {
+  hierarchyLevel: string;
+  responsibleId: string | null;
+  assigneeUserIds: readonly string[];
+};
+
+/** Metas anuais/trimestrais são estratégicas e só podem ser geridas por admins. */
+export function isStrategicGoal(hierarchyLevel: string): boolean {
+  return hierarchyLevel === "ANUAL" || hierarchyLevel === "TRIMESTRAL";
+}
+
+/**
+ * Autoriza mutação de uma meta já existente.
+ * Admins gerem tudo; demais papéis com escrita só gerem metas operacionais das
+ * quais participam como responsável principal ou distribuído.
+ */
+export function canMutateGoal(
+  role: Role,
+  userId: string,
+  goal: GoalAccessRecord,
+): boolean {
+  if (!canWrite(role) || !canAccessModule(role, "METAS")) return false;
+  if (isAdmin(role)) return true;
+  if (isStrategicGoal(goal.hierarchyLevel)) return false;
+  return (
+    goal.responsibleId === userId ||
+    goal.assigneeUserIds.includes(userId)
+  );
+}
+
 /**
  * Filtro de visibilidade de metas por papel (validado no backend).
  * - Admin e VIEWER: veem todas (VIEWER só leitura).

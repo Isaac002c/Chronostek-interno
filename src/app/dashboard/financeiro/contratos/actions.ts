@@ -1,12 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getCurrentUser } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { recurrenceOccurrences, competenceOf } from "@/lib/finance-rules";
-import type { ActionState } from "@/lib/actions";
+import { requireWrite, type ActionState } from "@/lib/actions";
 
 /**
  * Gera os lançamentos financeiros devidos a partir das recorrências ativas,
@@ -14,9 +12,9 @@ import type { ActionState } from "@/lib/actions";
  * duplica lançamentos já gerados (checa recurringEntryId + competência).
  */
 export async function generateRecurrences(): Promise<ActionState> {
-  const user = await getCurrentUser();
-  if (!user || !canWrite(user.role))
-    return { error: "Você não tem permissão para gerar recorrências." };
+  const auth = await requireWrite("FINANCEIRO");
+  if ("error" in auth) return auth;
+  const { user } = auth;
 
   const now = new Date();
   const horizon = new Date(now.getFullYear(), now.getMonth() + 1, 0); // fim do mês atual

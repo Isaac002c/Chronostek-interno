@@ -54,7 +54,7 @@ export async function createProject(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TI");
   if ("error" in auth) return auth;
 
   const parsed = projectSchema.safeParse(parseProject(fd));
@@ -77,7 +77,7 @@ export async function updateProject(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TI");
   if ("error" in auth) return auth;
 
   const parsed = projectSchema.safeParse(parseProject(fd));
@@ -95,7 +95,7 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TI");
   if ("error" in auth) return auth;
 
   try {

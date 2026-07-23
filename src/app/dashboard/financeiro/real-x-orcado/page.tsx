@@ -76,10 +76,6 @@ export default async function RealXOrcadoPage({
     { pRev: 0, pExp: 0, pProf: 0, rRev: 0, rExp: 0, rProf: 0 },
   );
 
-  const vTotRev = variance(totals.pRev, totals.rRev);
-  const vTotExp = variance(totals.pExp, totals.rExp);
-  const vTotProf = variance(totals.pProf, totals.rProf);
-
   const chartData = rows.map((r) => ({
     centro: r.centro,
     orcado: r.plannedProfit,

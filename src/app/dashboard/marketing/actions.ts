@@ -53,7 +53,7 @@ export async function createCampaign(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("MARKETING");
   if ("error" in auth) return auth;
 
   const parsed = campaignSchema.safeParse(parseCampaign(fd));
@@ -74,7 +74,7 @@ export async function updateCampaign(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("MARKETING");
   if ("error" in auth) return auth;
 
   const parsed = campaignSchema.safeParse(parseCampaign(fd));
@@ -91,7 +91,7 @@ export async function updateCampaign(
 }
 
 export async function deleteCampaign(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("MARKETING");
   if ("error" in auth) return auth;
 
   try {

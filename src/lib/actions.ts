@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { getCurrentUser, type SessionUser } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canAccessModule, canWrite, type NavModule } from "@/lib/rbac";
 
 export type ActionState = {
   ok?: boolean;
@@ -10,12 +10,14 @@ export type ActionState = {
 
 export const initialActionState: ActionState = {};
 
-/** Garante sessão + permissão de escrita. Retorna o usuário ou um erro. */
-export async function requireWrite(): Promise<
+/** Garante sessão + acesso ao módulo + permissão de escrita. */
+export async function requireWrite(module: NavModule): Promise<
   { user: SessionUser } | { error: string }
 > {
   const user = await getCurrentUser();
   if (!user) return { error: "Sessão expirada. Faça login novamente." };
+  if (!canAccessModule(user.role, module))
+    return { error: "Você não tem acesso a este módulo." };
   if (!canWrite(user.role))
     return { error: "Você não tem permissão para esta ação." };
   return { user };

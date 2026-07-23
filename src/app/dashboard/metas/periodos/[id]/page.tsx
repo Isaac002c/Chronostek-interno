@@ -3,7 +3,11 @@ import Link from "next/link";
 import { Plus, ChevronRight, Target, CalendarDays, Home, TrendingUp, ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import {
+  canManageStrategicGoals,
+  canWrite,
+  visibleGoalWhere,
+} from "@/lib/rbac";
 import { getGoalOptions, getUserOptions } from "@/lib/options";
 import { loadGoalAncestry, effectiveResponsibles } from "@/lib/goals";
 import { getPlanningPeriod, getPlanningBreadcrumb, getWeekDays } from "@/lib/planning";
@@ -17,7 +21,6 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { GoalFlatList } from "../../goal-tree";
@@ -51,13 +54,19 @@ export default async function PeriodPage({
   const period = await getPlanningPeriod(id);
   if (!period) notFound();
 
-  const writable = canWrite(user.role);
+  const visibility = visibleGoalWhere(user.role, user.id);
+  const strategicPeriod = period.type === "ANUAL" || period.type === "TRIMESTRAL";
+  const writable =
+    canWrite(user.role) &&
+    (!strategicPeriod || canManageStrategicGoals(user.role));
   const breadcrumb = await getPlanningBreadcrumb(period);
   const childType = period.children[0]?.type ?? null;
 
   // Metas ligadas diretamente a este período.
   const periodGoals = (await prisma.goal.findMany({
-    where: { deletedAt: null, planningPeriodId: id },
+    where: Object.keys(visibility).length
+      ? { AND: [{ deletedAt: null, planningPeriodId: id }, visibility] }
+      : { deletedAt: null, planningPeriodId: id },
     include: goalInclude,
     orderBy: [{ targetValue: "desc" }, { createdAt: "desc" }],
   })) as GoalWithRefs[];
@@ -96,7 +105,14 @@ export default async function PeriodPage({
   const subtreeIds = [...periodOfImmediate.keys()];
   const subtreeGoals = subtreeIds.length
     ? await prisma.goal.findMany({
-        where: { deletedAt: null, planningPeriodId: { in: subtreeIds } },
+        where: Object.keys(visibility).length
+          ? {
+              AND: [
+                { deletedAt: null, planningPeriodId: { in: subtreeIds } },
+                visibility,
+              ],
+            }
+          : { deletedAt: null, planningPeriodId: { in: subtreeIds } },
         select: { planningPeriodId: true, progressPercentage: true, status: true },
       })
     : [];
@@ -140,7 +156,7 @@ export default async function PeriodPage({
         include: { assignee: { select: { name: true } }, goal: { select: { id: true, title: true } } },
         orderBy: [{ status: "asc" }, { createdAt: "asc" }],
       }),
-      getGoalOptions(),
+      getGoalOptions(user),
       getUserOptions(),
     ]);
     dayGoalOptions = gopts;

@@ -57,7 +57,7 @@ export function UserForm({
           htmlFor="password"
           required={requirePassword}
           error={fe.password}
-          hint={requirePassword ? "Mínimo de 6 caracteres." : "Deixe em branco para manter a senha atual."}
+          hint={requirePassword ? "Mínimo de 12 caracteres." : "Deixe em branco para manter a senha atual (mínimo de 12 ao trocar)."}
         >
           <Input id="password" name="password" type="password" autoComplete="new-password" required={requirePassword} />
         </Field>

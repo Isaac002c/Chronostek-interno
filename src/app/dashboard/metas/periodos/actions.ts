@@ -11,8 +11,10 @@ export async function createPlanningYear(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("METAS");
   if ("error" in auth) return auth;
+  if (!isAdmin(auth.user.role))
+    return { error: "Apenas administradores podem criar períodos anuais." };
 
   const year = Number(str(fd, "year"));
   if (!Number.isInteger(year) || year < 2000 || year > 2100)
@@ -31,7 +33,7 @@ export async function createPlanningYear(
 
 /** Exclui um ano de planejamento (cascateia trimestres/meses/semanas). Só admin. */
 export async function deletePlanningYear(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("METAS");
   if ("error" in auth) return auth;
   if (!isAdmin(auth.user.role))
     return { error: "Apenas administradores podem excluir um período anual." };

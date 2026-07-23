@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canAccessModule, canWrite, isRestrictedToOwn } from "@/lib/rbac";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/format";
 import {
   LEAD_STATUS_LABELS,
@@ -59,7 +59,11 @@ export default async function LeadDetailPage({
   const { id } = await params;
 
   const lead = await prisma.lead.findFirst({
-    where: { id, deletedAt: null },
+    where: {
+      id,
+      deletedAt: null,
+      ...(isRestrictedToOwn(user.role) ? { responsibleId: user.id } : {}),
+    },
     include: {
       responsible: { select: { name: true } },
       campaign: { select: { id: true, name: true } },
@@ -97,12 +101,16 @@ export default async function LeadDetailPage({
               </Link>
             </Button>
             {lead.convertedClient ? (
-              <Button asChild variant="secondary">
-                <Link href={`/dashboard/comercial/clientes/${lead.convertedClient.id}`}>
-                  <UserCheck />
-                  Ver cliente
-                </Link>
-              </Button>
+              canAccessModule(user.role, "COMERCIAL") ? (
+                <Button asChild variant="secondary">
+                  <Link href={`/dashboard/comercial/clientes/${lead.convertedClient.id}`}>
+                    <UserCheck />
+                    Ver cliente
+                  </Link>
+                </Button>
+              ) : (
+                <Badge tone="success">Convertido em cliente</Badge>
+              )
             ) : (
               <ActionButton
                 action={convertLeadToClient.bind(null, lead.id)}

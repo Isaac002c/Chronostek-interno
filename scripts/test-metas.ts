@@ -21,7 +21,12 @@ import {
   weekdayOf,
   daysInMonth,
 } from "../src/lib/tz";
-import { visibleGoalWhere } from "../src/lib/rbac";
+import {
+  canAccessModule,
+  canMutateGoal,
+  canWrite,
+  visibleGoalWhere,
+} from "../src/lib/rbac";
 
 let passed = 0;
 let failed = 0;
@@ -166,6 +171,53 @@ console.log("Permissões (visibilidade de metas por papel):");
   const w = visibleGoalWhere("COMERCIAL", "u1");
   ok(Array.isArray(w.OR) && w.OR.length === 3, "papel de área: filtro OR (próprias + assignee + estratégicas)");
   ok(JSON.stringify(w).includes("u1"), "filtro restringe ao próprio usuário");
+}
+
+console.log("Permissões (matriz de escrita e mutação de metas):");
+{
+  ok(canAccessModule("FINANCEIRO", "FINANCEIRO"), "financeiro acessa o próprio módulo");
+  ok(!canAccessModule("MARKETING", "FINANCEIRO"), "marketing não acessa financeiro");
+  ok(!canWrite("VIEWER"), "viewer nunca possui escrita");
+  ok(
+    canMutateGoal("SUPER_ADMIN", "admin", {
+      hierarchyLevel: "ANUAL",
+      responsibleId: null,
+      assigneeUserIds: [],
+    }),
+    "admin gere meta estratégica",
+  );
+  ok(
+    !canMutateGoal("COMERCIAL", "u1", {
+      hierarchyLevel: "ANUAL",
+      responsibleId: "u1",
+      assigneeUserIds: ["u1"],
+    }),
+    "papel de área não altera meta estratégica mesmo sendo responsável",
+  );
+  ok(
+    canMutateGoal("COMERCIAL", "u1", {
+      hierarchyLevel: "MENSAL",
+      responsibleId: null,
+      assigneeUserIds: ["u1"],
+    }),
+    "responsável distribuído altera meta operacional",
+  );
+  ok(
+    !canMutateGoal("COMERCIAL", "u1", {
+      hierarchyLevel: "MENSAL",
+      responsibleId: "u2",
+      assigneeUserIds: ["u2"],
+    }),
+    "usuário não altera meta operacional alheia",
+  );
+  ok(
+    !canMutateGoal("VIEWER", "u1", {
+      hierarchyLevel: "MENSAL",
+      responsibleId: "u1",
+      assigneeUserIds: ["u1"],
+    }),
+    "viewer não altera nem a própria meta",
+  );
 }
 
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam.`);

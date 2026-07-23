@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import type { CategoryType } from "@prisma/client";
+import type { CategoryType, Prisma, Role } from "@prisma/client";
 import type { Option } from "@/lib/enums";
+import { canAccessModule, visibleGoalWhere } from "@/lib/rbac";
+
+type GoalOptionUser = { id: string; role: Role };
 
 export async function getUserOptions(): Promise<Option[]> {
   const rows = await prisma.user.findMany({
@@ -75,14 +78,19 @@ export type GoalParentCandidate = {
  * - SEMANAL → pai MENSAL do mesmo ano e mês.
  */
 export async function getGoalParentCandidates(
+  user: GoalOptionUser,
   excludeId?: string,
 ): Promise<GoalParentCandidate[]> {
+  const visibility = visibleGoalWhere(user.role, user.id);
+  const base: Prisma.GoalWhereInput = {
+    deletedAt: null,
+    hierarchyLevel: { in: ["ANUAL", "TRIMESTRAL", "MENSAL", "SEMANAL"] },
+    ...(excludeId ? { id: { not: excludeId } } : {}),
+  };
   const rows = await prisma.goal.findMany({
-    where: {
-      deletedAt: null,
-      hierarchyLevel: { in: ["ANUAL", "TRIMESTRAL", "MENSAL", "SEMANAL"] },
-      ...(excludeId ? { id: { not: excludeId } } : {}),
-    },
+    where: Object.keys(visibility).length
+      ? { AND: [base, visibility] }
+      : base,
     select: { id: true, title: true, hierarchyLevel: true, year: true, month: true, quarter: true },
     orderBy: [{ year: "desc" }, { quarter: "asc" }, { month: "asc" }],
   });
@@ -97,9 +105,14 @@ export async function getGoalParentCandidates(
 }
 
 /** Metas selecionáveis para vincular a uma tarefa/checklist (com nível no rótulo). */
-export async function getGoalOptions(): Promise<Option[]> {
+export async function getGoalOptions(user: GoalOptionUser): Promise<Option[]> {
+  if (!canAccessModule(user.role, "METAS")) return [];
+  const visibility = visibleGoalWhere(user.role, user.id);
+  const base = { deletedAt: null, status: { not: "CANCELADA" as const } };
   const rows = await prisma.goal.findMany({
-    where: { deletedAt: null, status: { not: "CANCELADA" } },
+    where: Object.keys(visibility).length
+      ? { AND: [base, visibility] }
+      : base,
     select: { id: true, title: true, hierarchyLevel: true, year: true },
     orderBy: [{ year: "desc" }, { createdAt: "desc" }],
     take: 500,

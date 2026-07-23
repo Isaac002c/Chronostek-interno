@@ -5,8 +5,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { Priority, TaskStatus, ModuleKey, ContributionUnit } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/session";
 import { recomputeGoalChain, logGoal } from "@/lib/goals";
+import {
+  canAccessModule,
+  isRestrictedToOwn,
+  visibleGoalWhere,
+} from "@/lib/rbac";
 import {
   requireWrite,
   zodFieldErrors,
@@ -64,23 +68,54 @@ function revalidateTaskViews() {
   revalidatePath("/dashboard/metas/checklists");
 }
 
+function taskWhereForUser(
+  id: string,
+  user: { id: string; role: import("@prisma/client").Role },
+) {
+  return {
+    id,
+    deletedAt: null,
+    ...(isRestrictedToOwn(user.role) ? { assigneeId: user.id } : {}),
+  };
+}
+
+async function canLinkGoal(
+  user: { id: string; role: import("@prisma/client").Role },
+  goalId: string | null,
+): Promise<boolean> {
+  if (!goalId) return true;
+  if (!canAccessModule(user.role, "METAS")) return false;
+  const visibility = visibleGoalWhere(user.role, user.id);
+  const goal = await prisma.goal.findFirst({
+    where: Object.keys(visibility).length
+      ? { AND: [{ id: goalId, deletedAt: null }, visibility] }
+      : { id: goalId, deletedAt: null },
+    select: { id: true },
+  });
+  return Boolean(goal);
+}
+
 export async function createTask(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Sessão expirada." };
+  const auth = await requireWrite("TAREFAS");
+  if ("error" in auth) return auth;
 
   const parsed = taskSchema.safeParse(parseTask(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
-  const d = parsed.data;
+  if (!(await canLinkGoal(auth.user, parsed.data.goalId)))
+    return { fieldErrors: { goalId: ["Meta indisponível para este usuário."] } };
+  const d = isRestrictedToOwn(auth.user.role)
+    ? { ...parsed.data, assigneeId: auth.user.id }
+    : parsed.data;
 
   try {
     const created = await prisma.task.create({
       data: {
         ...d,
         completedAt: d.status === "CONCLUIDA" ? new Date() : null,
-        createdById: user.id,
+        createdById: auth.user.id,
       },
     });
-    if (created.goalId) await recomputeGoalChain(created.goalId, user.id);
+    if (created.goalId) await recomputeGoalChain(created.goalId, auth.user.id);
   } catch {
     return { error: "Não foi possível criar a tarefa." };
   }
@@ -90,15 +125,22 @@ export async function createTask(_prev: ActionState, fd: FormData): Promise<Acti
 }
 
 export async function updateTask(id: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TAREFAS");
   if ("error" in auth) return auth;
 
   const parsed = taskSchema.safeParse(parseTask(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
-  const d = parsed.data;
+  if (!(await canLinkGoal(auth.user, parsed.data.goalId)))
+    return { fieldErrors: { goalId: ["Meta indisponível para este usuário."] } };
+  const d = isRestrictedToOwn(auth.user.role)
+    ? { ...parsed.data, assigneeId: auth.user.id }
+    : parsed.data;
 
   try {
-    const before = await prisma.task.findFirst({ where: { id, deletedAt: null }, select: { goalId: true, status: true } });
+    const before = await prisma.task.findFirst({
+      where: taskWhereForUser(id, auth.user),
+      select: { goalId: true, status: true },
+    });
     if (!before) return { error: "Tarefa não encontrada." };
 
     const wasDone = before.status === "CONCLUIDA";
@@ -126,12 +168,12 @@ export async function updateTask(id: string, _prev: ActionState, fd: FormData): 
 }
 
 export async function completeTask(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TAREFAS");
   if ("error" in auth) return auth;
 
   try {
     const t = await prisma.task.findFirst({
-      where: { id, deletedAt: null },
+      where: taskWhereForUser(id, auth.user),
       select: { goalId: true, plannedContribution: true, realizedContribution: true },
     });
     if (!t) return { error: "Tarefa não encontrada." };
@@ -155,11 +197,15 @@ export async function completeTask(id: string): Promise<ActionState> {
 }
 
 export async function deleteTask(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TAREFAS");
   if ("error" in auth) return auth;
 
   try {
-    const t = await prisma.task.findFirst({ where: { id, deletedAt: null }, select: { goalId: true } });
+    const t = await prisma.task.findFirst({
+      where: taskWhereForUser(id, auth.user),
+      select: { goalId: true },
+    });
+    if (!t) return { error: "Tarefa não encontrada." };
     await prisma.task.update({ where: { id }, data: { deletedAt: new Date() } });
     if (t?.goalId) await recomputeGoalChain(t.goalId, auth.user.id);
   } catch {

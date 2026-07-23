@@ -3,7 +3,12 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import {
+  canManageStrategicGoals,
+  canMutateGoal,
+  canWrite,
+  visibleGoalWhere,
+} from "@/lib/rbac";
 import { getUserOptions, getCostCenterOptions, getGoalParentCandidates, getGoalIndicatorOptions } from "@/lib/options";
 import { toDateInputValue } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
@@ -23,18 +28,29 @@ export default async function EditGoalPage({
   if (!canWrite(user.role)) redirect("/dashboard/metas");
 
   const { id } = await params;
+  const visibility = visibleGoalWhere(user.role, user.id);
   const [goal, users, costCenters, parents, indicators] = await Promise.all([
     prisma.goal.findFirst({
-      where: { id, deletedAt: null },
+      where: Object.keys(visibility).length
+        ? { AND: [{ id, deletedAt: null }, visibility] }
+        : { id, deletedAt: null },
       include: { assignees: { select: { userId: true, isPrimary: true, distributionType: true, plannedValue: true, percentage: true } } },
     }),
     getUserOptions(),
     getCostCenterOptions(),
-    getGoalParentCandidates(id),
+    getGoalParentCandidates(user, id),
     getGoalIndicatorOptions(),
   ]);
 
   if (!goal) notFound();
+  if (
+    !canMutateGoal(user.role, user.id, {
+      hierarchyLevel: goal.hierarchyLevel,
+      responsibleId: goal.responsibleId,
+      assigneeUserIds: goal.assignees.map((a) => a.userId),
+    })
+  )
+    redirect(`/dashboard/metas/${id}`);
 
   const primary = goal.assignees.find((a) => a.isPrimary)?.userId ?? goal.responsibleId ?? null;
   const responsibleIds =
@@ -63,6 +79,7 @@ export default async function EditGoalPage({
             costCenters={costCenters}
             indicators={indicators}
             parents={parents}
+            canManageStrategic={canManageStrategicGoals(user.role)}
             submitLabel="Salvar alterações"
             defaults={{
               title: goal.title,

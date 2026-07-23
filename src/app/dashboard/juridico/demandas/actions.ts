@@ -49,7 +49,7 @@ function parse(fd: FormData) {
 }
 
 export async function createLegalDemand(_p: ActionState, fd: FormData): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
   const parsed = schema.safeParse(parse(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
@@ -70,7 +70,7 @@ export async function createLegalDemand(_p: ActionState, fd: FormData): Promise<
 }
 
 export async function updateLegalDemand(id: string, _p: ActionState, fd: FormData): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
   const parsed = schema.safeParse(parse(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
@@ -88,7 +88,7 @@ export async function updateLegalDemand(id: string, _p: ActionState, fd: FormDat
 }
 
 export async function deleteLegalDemand(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
   try {
     await prisma.legalDemand.update({ where: { id }, data: { deletedAt: new Date() } });

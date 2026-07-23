@@ -35,14 +35,14 @@ const baseSchema = {
 
 const createSchema = z.object({
   ...baseSchema,
-  password: z.string().min(6, "Mínimo de 6 caracteres."),
+  password: z.string().min(12, "Mínimo de 12 caracteres."),
 });
 
 const updateSchema = z.object({
   ...baseSchema,
   password: z
     .string()
-    .min(6, "Mínimo de 6 caracteres.")
+    .min(12, "Mínimo de 12 caracteres.")
     .optional()
     .or(z.literal("")),
 });
@@ -71,7 +71,7 @@ export async function createUser(
   const { password, ...rest } = parsed.data;
   try {
     await prisma.user.create({
-      data: { ...rest, passwordHash: await bcrypt.hash(password, 10) },
+      data: { ...rest, passwordHash: await bcrypt.hash(password, 12) },
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -96,9 +96,30 @@ export async function updateUser(
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
 
   const { password, ...rest } = parsed.data;
+  const existing = await prisma.user.findFirst({
+    where: { id, deletedAt: null },
+    select: { role: true, status: true },
+  });
+  if (!existing) return { error: "Usuário não encontrado." };
+  if (
+    existing.role === "SUPER_ADMIN" &&
+    existing.status === "ATIVO" &&
+    (rest.role !== "SUPER_ADMIN" || rest.status !== "ATIVO")
+  ) {
+    const otherSuperAdmins = await prisma.user.count({
+      where: {
+        id: { not: id },
+        role: "SUPER_ADMIN",
+        status: "ATIVO",
+        deletedAt: null,
+      },
+    });
+    if (otherSuperAdmins === 0)
+      return { error: "Mantenha ao menos um superadministrador ativo." };
+  }
   const data: Prisma.UserUpdateInput = { ...rest };
-  if (password && password.length >= 6) {
-    data.passwordHash = await bcrypt.hash(password, 10);
+  if (password && password.length >= 12) {
+    data.passwordHash = await bcrypt.hash(password, 12);
   }
 
   try {
@@ -121,6 +142,23 @@ export async function deleteUser(id: string): Promise<ActionState> {
     return { error: "Você não pode excluir o próprio usuário." };
 
   try {
+    const existing = await prisma.user.findFirst({
+      where: { id, deletedAt: null },
+      select: { role: true, status: true },
+    });
+    if (!existing) return { error: "Usuário não encontrado." };
+    if (existing.role === "SUPER_ADMIN" && existing.status === "ATIVO") {
+      const otherSuperAdmins = await prisma.user.count({
+        where: {
+          id: { not: id },
+          role: "SUPER_ADMIN",
+          status: "ATIVO",
+          deletedAt: null,
+        },
+      });
+      if (otherSuperAdmins === 0)
+        return { error: "Mantenha ao menos um superadministrador ativo." };
+    }
     await prisma.user.update({
       where: { id },
       data: { deletedAt: new Date(), status: "INATIVO" },

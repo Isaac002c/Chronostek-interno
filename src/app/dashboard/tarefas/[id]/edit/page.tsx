@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canAccessModule, canWrite, isRestrictedToOwn } from "@/lib/rbac";
 import { toDateInputValue } from "@/lib/format";
 import { getUserOptions, getCostCenterOptions, getGoalOptions } from "@/lib/options";
 import { PageHeader } from "@/components/ui/page-header";
@@ -24,10 +24,20 @@ export default async function EditTaskPage({
 
   const { id } = await params;
   const [task, users, costCenters, goals] = await Promise.all([
-    prisma.task.findFirst({ where: { id, deletedAt: null } }),
-    getUserOptions(),
+    prisma.task.findFirst({
+      where: {
+        id,
+        deletedAt: null,
+        ...(isRestrictedToOwn(user.role) ? { assigneeId: user.id } : {}),
+      },
+    }),
+    isRestrictedToOwn(user.role)
+      ? Promise.resolve([{ value: user.id, label: user.name }])
+      : getUserOptions(),
     getCostCenterOptions(),
-    getGoalOptions(),
+    canAccessModule(user.role, "METAS")
+      ? getGoalOptions(user)
+      : Promise.resolve([]),
   ]);
 
   if (!task) notFound();

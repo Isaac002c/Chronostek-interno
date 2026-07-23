@@ -1,5 +1,7 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { canAccessModule, type NavModule } from "@/lib/rbac";
 
 export type SessionUser = {
@@ -9,17 +11,39 @@ export type SessionUser = {
   role: import("@prisma/client").Role;
 };
 
-/** Retorna o usuário logado ou null (sem redirecionar). */
-export async function getCurrentUser(): Promise<SessionUser | null> {
+/**
+ * Retorna o usuário ativo com papel atualizado ou null.
+ *
+ * O JWT identifica a sessão, mas o banco continua sendo a fonte de verdade:
+ * desativação, exclusão ou troca de papel passam a valer na requisição
+ * seguinte. `cache` evita repetir a consulta dentro da mesma renderização.
+ */
+export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
   const session = await auth();
   if (!session?.user?.id) return null;
+
+  const user = await prisma.user.findFirst({
+    where: {
+      id: session.user.id,
+      deletedAt: null,
+      status: "ATIVO",
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+  });
+  if (!user) return null;
+
   return {
-    id: session.user.id,
-    name: session.user.name ?? "",
-    email: session.user.email ?? "",
-    role: session.user.role,
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
   };
-}
+});
 
 /** Garante autenticação; redireciona para /login se não houver sessão. */
 export async function requireUser(): Promise<SessionUser> {

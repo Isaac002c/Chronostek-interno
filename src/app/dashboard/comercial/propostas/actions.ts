@@ -45,7 +45,7 @@ export async function createProposal(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   const parsed = proposalSchema.safeParse(parseProposal(fd));
@@ -66,7 +66,7 @@ export async function updateProposal(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   const parsed = proposalSchema.safeParse(parseProposal(fd));
@@ -83,7 +83,7 @@ export async function updateProposal(
 }
 
 export async function deleteProposal(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   try {

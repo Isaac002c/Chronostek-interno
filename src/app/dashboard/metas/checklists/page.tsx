@@ -72,7 +72,7 @@ export default async function ChecklistsPage({ searchParams }: { searchParams: P
     prisma.task.findMany({ where: { ...base, dueDate: { gte: todayStart, lte: todayEnd } }, include, orderBy: [{ status: "asc" }] , take: 100 }),
     prisma.task.findMany({ where: { ...base, status: { notIn: ["CONCLUIDA", "CANCELADA"] }, dueDate: { gt: todayEnd } }, include, orderBy: { dueDate: "asc" }, take: 50 }),
     getUserOptions(),
-    getGoalOptions(),
+    getGoalOptions(user),
   ]);
 
   const writable = canWrite(user.role);

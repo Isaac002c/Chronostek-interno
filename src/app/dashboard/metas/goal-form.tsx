@@ -64,6 +64,7 @@ export function GoalForm({
   defaults = {},
   submitLabel = "Salvar meta",
   allowAutoSplit = false,
+  canManageStrategic = false,
 }: {
   action: (prev: ActionState, fd: FormData) => Promise<ActionState>;
   users: Option[];
@@ -73,6 +74,7 @@ export function GoalForm({
   defaults?: GoalDefaults;
   submitLabel?: string;
   allowAutoSplit?: boolean;
+  canManageStrategic?: boolean;
 }) {
   const [state, formAction] = useActionState(action, initialActionState);
   useEffect(() => {
@@ -108,6 +110,11 @@ export function GoalForm({
     if (level === "DIARIA") return p.level === "SEMANAL" && p.year === Number(year) && (!month || p.month === Number(month));
     return false;
   });
+  const levelOptions = canManageStrategic
+    ? GOAL_LEVEL_OPTIONS
+    : GOAL_LEVEL_OPTIONS.filter(
+        (option) => option.value !== "ANUAL" && option.value !== "TRIMESTRAL",
+      );
 
   return (
     <form action={formAction} className="space-y-6">
@@ -119,7 +126,7 @@ export function GoalForm({
         </Field>
 
         <Field label="Nível" htmlFor="hierarchyLevel" required hint="Anual → Trimestral → Mensal → Semanal → Diária, ou Avulsa (sem hierarquia).">
-          <Select id="hierarchyLevel" name="hierarchyLevel" value={level} onChange={(e) => setLevel(e.target.value)} options={GOAL_LEVEL_OPTIONS} />
+          <Select id="hierarchyLevel" name="hierarchyLevel" value={level} onChange={(e) => setLevel(e.target.value)} options={levelOptions} />
         </Field>
         {showParent ? (
           <Field label="Meta pai" htmlFor="parentGoalId" error={fe.parentGoalId} hint={parentChoices.length === 0 ? "Nenhuma meta pai compatível para este ano/mês." : undefined}>

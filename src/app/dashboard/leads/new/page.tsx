@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canWrite, isRestrictedToOwn } from "@/lib/rbac";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,11 @@ export default async function NewLeadPage() {
   if (!canWrite(user.role)) redirect("/dashboard/leads");
 
   const users = await prisma.user.findMany({
-    where: { deletedAt: null, status: "ATIVO" },
+    where: {
+      deletedAt: null,
+      status: "ATIVO",
+      ...(isRestrictedToOwn(user.role) ? { id: user.id } : {}),
+    },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canAccessModule, canWrite, isRestrictedToOwn } from "@/lib/rbac";
 import { getUserOptions, getCostCenterOptions, getGoalOptions } from "@/lib/options";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,9 +25,13 @@ export default async function NewTaskPage({ searchParams }: { searchParams: Prom
   const periodId = one(sp.period);
 
   const [users, costCenters, goals] = await Promise.all([
-    getUserOptions(),
+    isRestrictedToOwn(user.role)
+      ? Promise.resolve([{ value: user.id, label: user.name }])
+      : getUserOptions(),
     getCostCenterOptions(),
-    getGoalOptions(),
+    canAccessModule(user.role, "METAS")
+      ? getGoalOptions(user)
+      : Promise.resolve([]),
   ]);
 
   const defaults: TaskDefaults = {

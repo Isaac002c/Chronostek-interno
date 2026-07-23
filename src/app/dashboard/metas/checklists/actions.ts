@@ -6,6 +6,11 @@ import { ContributionUnit } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recomputeGoalChain, logGoal } from "@/lib/goals";
 import {
+  canAccessModule,
+  isRestrictedToOwn,
+  visibleGoalWhere,
+} from "@/lib/rbac";
+import {
   requireWrite,
   zodFieldErrors,
   str,
@@ -17,6 +22,33 @@ import {
   type ActionState,
 } from "@/lib/actions";
 
+function checklistWhereForUser(
+  id: string,
+  user: { id: string; role: import("@prisma/client").Role },
+) {
+  return {
+    id,
+    deletedAt: null,
+    ...(isRestrictedToOwn(user.role) ? { assigneeId: user.id } : {}),
+  };
+}
+
+async function canLinkGoal(
+  user: { id: string; role: import("@prisma/client").Role },
+  goalId: string | null,
+): Promise<boolean> {
+  if (!goalId) return true;
+  if (!canAccessModule(user.role, "METAS")) return false;
+  const visibility = visibleGoalWhere(user.role, user.id);
+  const goal = await prisma.goal.findFirst({
+    where: Object.keys(visibility).length
+      ? { AND: [{ id: goalId, deletedAt: null }, visibility] }
+      : { id: goalId, deletedAt: null },
+    select: { id: true },
+  });
+  return Boolean(goal);
+}
+
 function revalidateChecklistViews() {
   revalidatePath("/dashboard/metas");
   revalidatePath("/dashboard/metas/checklists");
@@ -25,12 +57,12 @@ function revalidateChecklistViews() {
 
 /** Conclui um checklist com o valor planejado (ou já realizado) e alimenta a meta. */
 export async function completeChecklist(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TAREFAS");
   if ("error" in auth) return auth;
 
   try {
     const t = await prisma.task.findFirst({
-      where: { id, deletedAt: null },
+      where: checklistWhereForUser(id, auth.user),
       select: { goalId: true, plannedContribution: true, realizedContribution: true },
     });
     if (!t) return { error: "Checklist não encontrado." };
@@ -55,11 +87,14 @@ export async function completeChecklist(id: string): Promise<ActionState> {
 
 /** Reabre um checklist (volta a A_FAZER, zera o realizado) e recalcula a meta. */
 export async function reopenChecklist(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TAREFAS");
   if ("error" in auth) return auth;
 
   try {
-    const t = await prisma.task.findFirst({ where: { id, deletedAt: null }, select: { goalId: true } });
+    const t = await prisma.task.findFirst({
+      where: checklistWhereForUser(id, auth.user),
+      select: { goalId: true },
+    });
     if (!t) return { error: "Checklist não encontrado." };
 
     await prisma.task.update({
@@ -92,7 +127,7 @@ export async function saveChecklistResult(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TAREFAS");
   if ("error" in auth) return auth;
 
   const parsed = updateResultSchema.safeParse({
@@ -105,7 +140,10 @@ export async function saveChecklistResult(
   const d = parsed.data;
 
   try {
-    const t = await prisma.task.findFirst({ where: { id, deletedAt: null }, select: { goalId: true, status: true } });
+    const t = await prisma.task.findFirst({
+      where: checklistWhereForUser(id, auth.user),
+      select: { goalId: true, status: true },
+    });
     if (!t) return { error: "Checklist não encontrado." };
 
     await prisma.task.update({
@@ -146,7 +184,7 @@ export async function quickCreateChecklist(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TAREFAS");
   if ("error" in auth) return auth;
 
   const parsed = quickSchema.safeParse({
@@ -160,7 +198,11 @@ export async function quickCreateChecklist(
     plannedContribution: optNum(fd, "plannedContribution"),
   });
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
-  const d = parsed.data;
+  if (!(await canLinkGoal(auth.user, parsed.data.goalId)))
+    return { fieldErrors: { goalId: ["Meta indisponível para este usuário."] } };
+  const d = isRestrictedToOwn(auth.user.role)
+    ? { ...parsed.data, assigneeId: auth.user.id }
+    : parsed.data;
 
   try {
     await prisma.task.create({

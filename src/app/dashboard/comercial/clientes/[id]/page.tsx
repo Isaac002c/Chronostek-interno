@@ -32,7 +32,6 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { HealthScore } from "@/components/ui/health-score";
-import { EmptyState } from "@/components/ui/empty-state";
 import { StatCard } from "@/components/ui/stat-card";
 import { DeleteButton } from "@/components/form/delete-button";
 import { deleteClient } from "../actions";

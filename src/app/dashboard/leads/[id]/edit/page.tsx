@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canWrite, isRestrictedToOwn } from "@/lib/rbac";
 import { toDateInputValue } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,9 +23,19 @@ export default async function EditLeadPage({
 
   const { id } = await params;
   const [lead, users] = await Promise.all([
-    prisma.lead.findFirst({ where: { id, deletedAt: null } }),
+    prisma.lead.findFirst({
+      where: {
+        id,
+        deletedAt: null,
+        ...(isRestrictedToOwn(user.role) ? { responsibleId: user.id } : {}),
+      },
+    }),
     prisma.user.findMany({
-      where: { deletedAt: null, status: "ATIVO" },
+      where: {
+        deletedAt: null,
+        status: "ATIVO",
+        ...(isRestrictedToOwn(user.role) ? { id: user.id } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, Pencil, History, ListChecks, Users } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canMutateGoal, visibleGoalWhere } from "@/lib/rbac";
 import { getUserOptions, getCostCenterOptions } from "@/lib/options";
 import { loadGoalAncestry, effectiveResponsibles, effectiveCostCenter } from "@/lib/goals";
 import { formatDate, formatDateTime } from "@/lib/format";
@@ -33,9 +33,12 @@ export const dynamic = "force-dynamic";
 export default async function GoalDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireModule("METAS");
   const { id } = await params;
+  const visibility = visibleGoalWhere(user.role, user.id);
 
   const goal = await prisma.goal.findFirst({
-    where: { id, deletedAt: null },
+    where: Object.keys(visibility).length
+      ? { AND: [{ id, deletedAt: null }, visibility] }
+      : { id, deletedAt: null },
     include: {
       assignees: { include: { user: { select: { id: true, name: true } } } },
       responsible: { select: { name: true } },
@@ -43,7 +46,9 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
       planningPeriod: { select: { id: true, name: true } },
       parent: { select: { id: true, title: true } },
       children: {
-        where: { deletedAt: null },
+        where: Object.keys(visibility).length
+          ? { AND: [{ deletedAt: null }, visibility] }
+          : { deletedAt: null },
         select: { id: true, title: true, status: true, currentValue: true, targetValue: true, unit: true },
         orderBy: [{ month: "asc" }, { week: "asc" }],
       },
@@ -70,7 +75,11 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
     loadGoalAncestry([id]),
   ]);
 
-  const writable = canWrite(user.role);
+  const writable = canMutateGoal(user.role, user.id, {
+    hierarchyLevel: goal.hierarchyLevel,
+    responsibleId: goal.responsibleId,
+    assigneeUserIds: goal.assignees.map((a) => a.userId),
+  });
   const now = new Date();
   const progress = Math.round(goal.progressPercentage);
   const clamped = Math.min(100, Math.max(0, goal.progressPercentage));

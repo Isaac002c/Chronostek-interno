@@ -47,7 +47,7 @@ export async function createClient(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   const parsed = clientSchema.safeParse(parseClient(fd));
@@ -70,7 +70,7 @@ export async function updateClient(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   const parsed = clientSchema.safeParse(parseClient(fd));
@@ -88,7 +88,7 @@ export async function updateClient(
 }
 
 export async function deleteClient(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("COMERCIAL");
   if ("error" in auth) return auth;
 
   try {

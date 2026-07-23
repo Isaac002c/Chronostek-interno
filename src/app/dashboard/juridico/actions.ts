@@ -54,7 +54,7 @@ export async function createLegalContract(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
 
   const parsed = legalSchema.safeParse(parseLegal(fd));
@@ -75,7 +75,7 @@ export async function updateLegalContract(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
 
   const parsed = legalSchema.safeParse(parseLegal(fd));
@@ -92,7 +92,7 @@ export async function updateLegalContract(
 }
 
 export async function deleteLegalContract(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
 
   try {
@@ -134,7 +134,7 @@ export async function createDeadline(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
 
   const parsed = deadlineSchema.safeParse(parseDeadline(fd));
@@ -151,7 +151,7 @@ export async function createDeadline(
 }
 
 export async function markDeadlineDone(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
 
   try {
@@ -168,7 +168,7 @@ export async function markDeadlineDone(id: string): Promise<ActionState> {
 }
 
 export async function deleteDeadline(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
 
   try {

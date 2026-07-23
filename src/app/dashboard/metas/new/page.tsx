@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canManageStrategicGoals, canWrite } from "@/lib/rbac";
 import { getUserOptions, getCostCenterOptions, getGoalParentCandidates, getGoalIndicatorOptions } from "@/lib/options";
 import { nowSpParts } from "@/lib/tz";
 import { PageHeader } from "@/components/ui/page-header";
@@ -33,11 +33,12 @@ export default async function NewGoalPage({ searchParams }: { searchParams: Prom
   const periodId = one(sp.period);
   const levelParam = one(sp.level);
   const VALID_LEVELS = ["ANUAL", "TRIMESTRAL", "MENSAL", "SEMANAL", "DIARIA", "AVULSA"];
+  const canManageStrategic = canManageStrategicGoals(user.role);
 
   const [users, costCenters, parents, indicators, period] = await Promise.all([
     getUserOptions(),
     getCostCenterOptions(),
-    getGoalParentCandidates(),
+    getGoalParentCandidates(user),
     getGoalIndicatorOptions(),
     periodId
       ? prisma.planningPeriod.findUnique({
@@ -49,14 +50,21 @@ export default async function NewGoalPage({ searchParams }: { searchParams: Prom
 
   const defaults: GoalDefaults = period
     ? {
-        hierarchyLevel: TYPE_TO_LEVEL[period.type] ?? "AVULSA",
+        hierarchyLevel:
+          !canManageStrategic &&
+          (period.type === "ANUAL" || period.type === "TRIMESTRAL")
+            ? "AVULSA"
+            : TYPE_TO_LEVEL[period.type] ?? "AVULSA",
         year: period.year,
         quarter: period.quarter,
         month: period.month,
         week: period.week,
         planningPeriodId: period.id,
       }
-    : levelParam && VALID_LEVELS.includes(levelParam)
+    : levelParam &&
+        VALID_LEVELS.includes(levelParam) &&
+        (canManageStrategic ||
+          (levelParam !== "ANUAL" && levelParam !== "TRIMESTRAL"))
       ? { hierarchyLevel: levelParam, year: nowSpParts().year }
       : {};
 
@@ -72,7 +80,16 @@ export default async function NewGoalPage({ searchParams }: { searchParams: Prom
       </PageHeader>
       <Card>
         <CardContent className="pt-6">
-          <GoalForm action={createGoal} users={users} costCenters={costCenters} indicators={indicators} parents={parents} defaults={defaults} allowAutoSplit />
+          <GoalForm
+            action={createGoal}
+            users={users}
+            costCenters={costCenters}
+            indicators={indicators}
+            parents={parents}
+            defaults={defaults}
+            allowAutoSplit
+            canManageStrategic={canManageStrategic}
+          />
         </CardContent>
       </Card>
     </>

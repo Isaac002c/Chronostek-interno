@@ -43,7 +43,7 @@ function parse(fd: FormData) {
 }
 
 async function requireAdmin() {
-  const auth = await requireWrite();
+  const auth = await requireWrite("CONFIGURACOES");
   if ("error" in auth) return auth;
   if (!isAdmin(auth.user.role)) return { error: "Apenas administradores podem gerenciar indicadores." };
   return auth;

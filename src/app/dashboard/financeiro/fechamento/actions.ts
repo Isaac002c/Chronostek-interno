@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import type { Role } from "@prisma/client";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
@@ -8,8 +9,8 @@ import { writeAudit } from "@/lib/audit";
 import { CLOSING_CHECKLIST } from "@/lib/closing";
 import { str, optStr, optInt, type ActionState } from "@/lib/actions";
 
-function canClose(role: string) {
-  return isAdmin(role as never) || role === "FINANCEIRO";
+function canClose(role: Role) {
+  return isAdmin(role) || role === "FINANCEIRO";
 }
 
 export async function closeMonth(

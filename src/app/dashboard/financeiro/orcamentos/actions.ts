@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { BudgetPeriodType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/session";
 import {
   requireWrite,
   zodFieldErrors,
@@ -45,7 +44,7 @@ export async function createBudget(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("FINANCEIRO");
   if ("error" in auth) return auth;
 
   const parsed = schema.safeParse(parse(fd));
@@ -81,7 +80,7 @@ export async function updateBudget(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("FINANCEIRO");
   if ("error" in auth) return auth;
 
   const parsed = schema.safeParse(parse(fd));
@@ -121,8 +120,9 @@ async function setStatus(
   id: string,
   status: "APROVADO" | "ATIVO" | "ENCERRADO",
 ): Promise<ActionState> {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Sessão expirada." };
+  const auth = await requireWrite("FINANCEIRO");
+  if ("error" in auth) return auth;
+  const { user } = auth;
   try {
     await prisma.budget.update({
       where: { id },
@@ -150,7 +150,7 @@ export async function closeBudget(id: string): Promise<ActionState> {
 }
 
 export async function deleteBudget(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("FINANCEIRO");
   if ("error" in auth) return auth;
   try {
     await prisma.budget.update({ where: { id }, data: { deletedAt: new Date() } });

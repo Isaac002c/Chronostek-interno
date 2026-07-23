@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CalendarRange, ChevronRight, Layers, Target } from "lucide-react";
 import { requireModule } from "@/lib/session";
-import { canWrite, isAdmin } from "@/lib/rbac";
+import { isAdmin } from "@/lib/rbac";
 import { listPlanningYears } from "@/lib/planning";
 import { nowSpParts } from "@/lib/tz";
 import { PageHeader } from "@/components/ui/page-header";
@@ -16,7 +16,6 @@ export const dynamic = "force-dynamic";
 export default async function PlanningYearsPage() {
   const user = await requireModule("METAS");
   const years = await listPlanningYears();
-  const writable = canWrite(user.role);
   const admin = isAdmin(user.role);
   const currentYear = nowSpParts().year;
 
@@ -27,7 +26,7 @@ export default async function PlanningYearsPage() {
         description="Estrutura anual de metas: Ano → Trimestre → Mês → Semana → Dia. Clique para navegar em qualquer nível."
       />
 
-      {writable && (
+      {admin && (
         <Card className="p-4">
           <p className="mb-3 text-sm text-muted-foreground">
             Crie a estrutura de um ano. Os 4 trimestres, os 12 meses e as semanas reais do calendário

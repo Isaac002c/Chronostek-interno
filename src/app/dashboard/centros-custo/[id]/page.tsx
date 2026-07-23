@@ -27,14 +27,12 @@ import {
   PRIORITY_TONE,
   FINANCIAL_STATUS_LABELS,
   FINANCIAL_STATUS_TONE,
-  FINANCIAL_TYPE_LABELS,
 } from "@/lib/enums";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { StatCard } from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export const dynamic = "force-dynamic";

@@ -42,7 +42,7 @@ export async function createTimesheet(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TI");
   if ("error" in auth) return auth;
 
   const parsed = timesheetSchema.safeParse(parseTimesheet(fd));
@@ -61,7 +61,7 @@ export async function createTimesheet(
 }
 
 export async function deleteTimesheet(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("TI");
   if ("error" in auth) return auth;
 
   try {

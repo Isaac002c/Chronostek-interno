@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { LeadOrigin, LeadStatus, LeadInteractionType, Priority } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/session";
+import { canAccessModule, isRestrictedToOwn } from "@/lib/rbac";
 import {
   requireWrite,
   zodFieldErrors,
@@ -62,11 +62,22 @@ function parseLead(fd: FormData) {
   };
 }
 
+function leadWhereForUser(
+  id: string,
+  user: { id: string; role: import("@prisma/client").Role },
+) {
+  return {
+    id,
+    deletedAt: null,
+    ...(isRestrictedToOwn(user.role) ? { responsibleId: user.id } : {}),
+  };
+}
+
 export async function createLead(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("LEADS");
   if ("error" in auth) return auth;
 
   const parsed = leadSchema.safeParse(parseLead(fd));
@@ -74,7 +85,10 @@ export async function createLead(
 
   let id: string;
   try {
-    const lead = await prisma.lead.create({ data: parsed.data });
+    const data = isRestrictedToOwn(auth.user.role)
+      ? { ...parsed.data, responsibleId: auth.user.id }
+      : parsed.data;
+    const lead = await prisma.lead.create({ data });
     id = lead.id;
   } catch {
     return { error: "Não foi possível salvar o lead." };
@@ -89,14 +103,22 @@ export async function updateLead(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("LEADS");
   if ("error" in auth) return auth;
 
   const parsed = leadSchema.safeParse(parseLead(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
 
   try {
-    await prisma.lead.update({ where: { id }, data: parsed.data });
+    const existing = await prisma.lead.findFirst({
+      where: leadWhereForUser(id, auth.user),
+      select: { id: true },
+    });
+    if (!existing) return { error: "Lead não encontrado." };
+    const data = isRestrictedToOwn(auth.user.role)
+      ? { ...parsed.data, responsibleId: auth.user.id }
+      : parsed.data;
+    await prisma.lead.update({ where: { id }, data });
   } catch {
     return { error: "Não foi possível atualizar o lead." };
   }
@@ -107,14 +129,15 @@ export async function updateLead(
 }
 
 export async function deleteLead(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("LEADS");
   if ("error" in auth) return auth;
 
   try {
-    await prisma.lead.update({
-      where: { id },
+    const result = await prisma.lead.updateMany({
+      where: leadWhereForUser(id, auth.user),
       data: { deletedAt: new Date() },
     });
+    if (result.count === 0) return { error: "Lead não encontrado." };
   } catch {
     return { error: "Não foi possível excluir o lead." };
   }
@@ -128,17 +151,22 @@ export async function addInteraction(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Sessão expirada." };
+  const auth = await requireWrite("LEADS");
+  if ("error" in auth) return auth;
 
   const content = str(fd, "content");
   if (!content) return { fieldErrors: { content: ["Descreva a interação."] } };
 
   try {
+    const lead = await prisma.lead.findFirst({
+      where: leadWhereForUser(leadId, auth.user),
+      select: { id: true },
+    });
+    if (!lead) return { error: "Lead não encontrado." };
     await prisma.leadInteraction.create({
       data: {
         leadId,
-        userId: user.id,
+        userId: auth.user.id,
         type: (optEnum(fd, "type") ?? "NOTA") as LeadInteractionType,
         content,
       },
@@ -156,13 +184,18 @@ export async function createTaskForLead(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Sessão expirada." };
+  const auth = await requireWrite("LEADS");
+  if ("error" in auth) return auth;
 
   const title = str(fd, "title");
   if (!title) return { fieldErrors: { title: ["Informe o título da tarefa."] } };
 
   try {
+    const lead = await prisma.lead.findFirst({
+      where: leadWhereForUser(leadId, auth.user),
+      select: { id: true },
+    });
+    if (!lead) return { error: "Lead não encontrado." };
     await prisma.task.create({
       data: {
         title,
@@ -170,8 +203,8 @@ export async function createTaskForLead(
         module: "LEADS",
         priority: (optEnum(fd, "priority") ?? "MEDIA") as Priority,
         dueDate: optDate(fd, "dueDate"),
-        assigneeId: user.id,
-        createdById: user.id,
+        assigneeId: auth.user.id,
+        createdById: auth.user.id,
       },
     });
   } catch {
@@ -183,31 +216,41 @@ export async function createTaskForLead(
 }
 
 export async function convertLeadToClient(leadId: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("LEADS");
   if ("error" in auth) return auth;
 
-  const lead = await prisma.lead.findUnique({ where: { id: leadId } });
+  const lead = await prisma.lead.findFirst({
+    where: leadWhereForUser(leadId, auth.user),
+  });
   if (!lead) return { error: "Lead não encontrado." };
   if (lead.convertedClientId)
     return { error: "Este lead já foi convertido em cliente." };
 
   let clientId: string;
   try {
-    const client = await prisma.client.create({
-      data: {
-        name: lead.company || lead.name,
-        tradeName: lead.company ? lead.name : null,
-        email: lead.email,
-        phone: lead.phone,
-        origin: lead.origin,
-        status: "ATIVO",
-        internalResponsibleId: lead.responsibleId,
-      },
-    });
-    clientId = client.id;
-    await prisma.lead.update({
-      where: { id: leadId },
-      data: { convertedClientId: clientId, status: "GANHO" },
+    clientId = await prisma.$transaction(async (tx) => {
+      const client = await tx.client.create({
+        data: {
+          name: lead.company || lead.name,
+          tradeName: lead.company ? lead.name : null,
+          email: lead.email,
+          phone: lead.phone,
+          origin: lead.origin,
+          status: "ATIVO",
+          internalResponsibleId: lead.responsibleId,
+        },
+      });
+      const claimedLead = await tx.lead.updateMany({
+        where: {
+          ...leadWhereForUser(leadId, auth.user),
+          convertedClientId: null,
+        },
+        data: { convertedClientId: client.id, status: "GANHO" },
+      });
+      if (claimedLead.count !== 1) {
+        throw new Error("Lead já convertido ou fora do escopo.");
+      }
+      return client.id;
     });
   } catch {
     return { error: "Não foi possível converter o lead." };
@@ -215,5 +258,9 @@ export async function convertLeadToClient(leadId: string): Promise<ActionState> 
 
   revalidatePath("/dashboard/leads");
   revalidatePath("/dashboard/comercial/clientes");
-  redirect(`/dashboard/comercial/clientes/${clientId}`);
+  redirect(
+    canAccessModule(auth.user.role, "COMERCIAL")
+      ? `/dashboard/comercial/clientes/${clientId}`
+      : `/dashboard/leads/${leadId}`,
+  );
 }

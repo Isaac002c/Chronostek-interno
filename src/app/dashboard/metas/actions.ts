@@ -15,6 +15,11 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { recomputeGoalTree, logGoal, distributeAssignees, equalSplit } from "@/lib/goals";
+import {
+  canManageStrategicGoals,
+  canMutateGoal,
+  visibleGoalWhere,
+} from "@/lib/rbac";
 import { monthLabel } from "@/lib/format";
 import { monthRange, calendarWeeksOfMonth, spDayStart, spDayEnd } from "@/lib/tz";
 import {
@@ -171,12 +176,23 @@ async function resolvePlanningPeriod(
 }
 
 /** Valida vínculo de meta pai: existência, compatibilidade de nível/período e ausência de ciclo. */
-async function validateParent(d: GoalData, editingId?: string): Promise<string | null> {
+async function validateParent(
+  d: GoalData,
+  user: { id: string; role: import("@prisma/client").Role },
+  editingId?: string,
+): Promise<string | null> {
   if (!d.parentGoalId) return null;
   if (editingId && d.parentGoalId === editingId) return "Uma meta não pode ser pai dela mesma.";
 
+  const visibility = visibleGoalWhere(user.role, user.id);
+  const base: Prisma.GoalWhereInput = {
+    id: d.parentGoalId,
+    deletedAt: null,
+  };
   const parent = await prisma.goal.findFirst({
-    where: { id: d.parentGoalId, deletedAt: null },
+    where: Object.keys(visibility).length
+      ? { AND: [base, visibility] }
+      : base,
     select: { id: true, hierarchyLevel: true, year: true, month: true, quarter: true, parentGoalId: true },
   });
   if (!parent) return "Meta pai não encontrada.";
@@ -305,14 +321,20 @@ async function autoSplitGoal(
 }
 
 export async function createGoal(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("METAS");
   if ("error" in auth) return auth;
 
   const parsed = goalSchema.safeParse(parseGoal(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
   const { distributionType, ...goalData } = parsed.data;
+  if (
+    (goalData.hierarchyLevel === "ANUAL" ||
+      goalData.hierarchyLevel === "TRIMESTRAL") &&
+    !canManageStrategicGoals(auth.user.role)
+  )
+    return { error: "Apenas administradores podem criar metas estratégicas." };
 
-  const parentError = await validateParent(parsed.data);
+  const parentError = await validateParent(parsed.data, auth.user);
   if (parentError) return { fieldErrors: { parentGoalId: [parentError] } };
 
   const { ids, primary } = parseAssignees(fd);
@@ -347,22 +369,42 @@ export async function createGoal(_prev: ActionState, fd: FormData): Promise<Acti
 }
 
 export async function updateGoal(id: string, _prev: ActionState, fd: FormData): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("METAS");
   if ("error" in auth) return auth;
 
   const parsed = goalSchema.safeParse(parseGoal(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
   const { distributionType, ...goalData } = parsed.data;
+  if (
+    (goalData.hierarchyLevel === "ANUAL" ||
+      goalData.hierarchyLevel === "TRIMESTRAL") &&
+    !canManageStrategicGoals(auth.user.role)
+  )
+    return { error: "Apenas administradores podem gerir metas estratégicas." };
 
-  const parentError = await validateParent(parsed.data, id);
+  const parentError = await validateParent(parsed.data, auth.user, id);
   if (parentError) return { fieldErrors: { parentGoalId: [parentError] } };
 
   const { ids, primary } = parseAssignees(fd);
   const explicitPeriodId = optStr(fd, "planningPeriodId");
 
   try {
-    const before = await prisma.goal.findFirst({ where: { id, deletedAt: null } });
+    const visibility = visibleGoalWhere(auth.user.role, auth.user.id);
+    const before = await prisma.goal.findFirst({
+      where: Object.keys(visibility).length
+        ? { AND: [{ id, deletedAt: null }, visibility] }
+        : { id, deletedAt: null },
+      include: { assignees: { select: { userId: true } } },
+    });
     if (!before) return { error: "Meta não encontrada." };
+    if (
+      !canMutateGoal(auth.user.role, auth.user.id, {
+        hierarchyLevel: before.hierarchyLevel,
+        responsibleId: before.responsibleId,
+        assigneeUserIds: before.assignees.map((a) => a.userId),
+      })
+    )
+      return { error: "Você não tem permissão para alterar esta meta." };
 
     const period = await resolvePlanningPeriod(parsed.data, explicitPeriodId);
     const startDate = goalData.startDate ?? period?.startDate ?? null;
@@ -401,10 +443,26 @@ export async function updateGoal(id: string, _prev: ActionState, fd: FormData): 
 }
 
 export async function deleteGoal(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("METAS");
   if ("error" in auth) return auth;
 
   try {
+    const visibility = visibleGoalWhere(auth.user.role, auth.user.id);
+    const goal = await prisma.goal.findFirst({
+      where: Object.keys(visibility).length
+        ? { AND: [{ id, deletedAt: null }, visibility] }
+        : { id, deletedAt: null },
+      include: { assignees: { select: { userId: true } } },
+    });
+    if (!goal) return { error: "Meta não encontrada." };
+    if (
+      !canMutateGoal(auth.user.role, auth.user.id, {
+        hierarchyLevel: goal.hierarchyLevel,
+        responsibleId: goal.responsibleId,
+        assigneeUserIds: goal.assignees.map((a) => a.userId),
+      })
+    )
+      return { error: "Você não tem permissão para excluir esta meta." };
     await prisma.goal.updateMany({ where: { parentGoalId: id }, data: { parentGoalId: null } });
     await prisma.goal.update({ where: { id }, data: { deletedAt: new Date() } });
     await logGoal(id, "EXCLUIDA", {}, auth.user.id);
@@ -419,7 +477,7 @@ export async function deleteGoal(id: string): Promise<ActionState> {
 
 /** Recalcula todas as metas automáticas e consolida a árvore (folhas → pais). */
 export async function recalcAutomaticGoals(): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("METAS");
   if ("error" in auth) return auth;
 
   try {

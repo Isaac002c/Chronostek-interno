@@ -57,7 +57,7 @@ function parse(fd: FormData) {
 }
 
 export async function createLegalRisk(_p: ActionState, fd: FormData): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
   const parsed = schema.safeParse(parse(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
@@ -78,7 +78,7 @@ export async function createLegalRisk(_p: ActionState, fd: FormData): Promise<Ac
 }
 
 export async function updateLegalRisk(id: string, _p: ActionState, fd: FormData): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
   const parsed = schema.safeParse(parse(fd));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
@@ -96,7 +96,7 @@ export async function updateLegalRisk(id: string, _p: ActionState, fd: FormData)
 }
 
 export async function deleteLegalRisk(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("JURIDICO");
   if ("error" in auth) return auth;
   try {
     await prisma.legalRisk.update({ where: { id }, data: { deletedAt: new Date() } });

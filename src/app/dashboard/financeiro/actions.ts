@@ -71,7 +71,7 @@ export async function createEntry(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("FINANCEIRO");
   if ("error" in auth) return auth;
 
   const parsed = entrySchema.safeParse(parseEntry(fd));
@@ -111,7 +111,7 @@ export async function updateEntry(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("FINANCEIRO");
   if ("error" in auth) return auth;
 
   const parsed = entrySchema.safeParse(parseEntry(fd));
@@ -141,7 +141,7 @@ export async function updateEntry(
 }
 
 export async function deleteEntry(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("FINANCEIRO");
   if ("error" in auth) return auth;
 
   try {
@@ -168,7 +168,7 @@ export async function deleteEntry(id: string): Promise<ActionState> {
 
 /** Atalho: marcar um lançamento como pago hoje. */
 export async function markEntryPaid(id: string): Promise<ActionState> {
-  const auth = await requireWrite();
+  const auth = await requireWrite("FINANCEIRO");
   if ("error" in auth) return auth;
 
   try {
