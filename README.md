@@ -24,7 +24,7 @@ Para HTTPS (cookies seguros), aponte um domínio para a VPS e coloque um proxy T
 
 ## 1. Requisitos
 
-- Node.js 18.18+ (testado em Node 24)
+- Node.js 20.9+ (testado em Node 24)
 - Um banco PostgreSQL — recomendado [Neon](https://neon.tech)
 
 ## 2. Variáveis de ambiente
@@ -38,16 +38,23 @@ DATABASE_URL="postgresql://USER:PASSWORD@HOST/DB?sslmode=require"
 # Segredo das sessões JWT (Auth.js). Gere com: npx auth secret
 AUTH_SECRET="um-segredo-forte-aqui"
 
-# Opcional em produção:
+# Senha inicial forte (mínimo de 12 caracteres) para os usuários de referência
+SEED_ADMIN_PASSWORD="gere-uma-senha-unica-e-forte"
+
+# Produção:
 # AUTH_URL="https://interno.telun.com.br"
+# AUTH_TRUST_HOST="true" # apenas atrás de proxy confiável
+
+# Dados fictícios são opt-in e devem ficar desativados em produção
+SEED_DEMO_DATA="false"
 ```
 
 ## 3. Rodar localmente
 
 ```bash
 npm install            # instala deps + gera o Prisma Client (postinstall)
-npm run db:push        # cria as tabelas no banco a partir do schema
-npm run db:seed        # popula dados iniciais (admin, centros de custo, exemplos)
+npm run db:deploy      # aplica as migrations versionadas
+npm run db:seed        # cria referências e usuários iniciais
 npm run dev            # http://localhost:3000
 ```
 
@@ -81,17 +88,34 @@ npm start
 | `npm run db:baseline` | Marca o schema atual como aplicado (banco pré-existente, roda 1×) |
 | `npm run db:migrate` | **Dev**: cria uma migration versionada (`prisma migrate dev`) |
 | `npm run db:push` | Sincroniza schema sem histórico (só p/ protótipo local rápido) |
-| `npm run db:seed` | Roda `prisma/seed.ts` (idempotente na parte de referência) |
+| `npm run db:seed` | Roda `prisma/seed.ts` (idempotente e sem dados fictícios por padrão) |
 | `npm run db:studio` | Abre o Prisma Studio |
 | `npm run db:reset` | **Apaga** o banco e re-aplica migrations + seed |
 
 ## 5. Credenciais de acesso (seed)
 
-O seed cria 8 usuários, um por perfil: `SUPER_ADMIN`, `SOCIO_ADMIN`, `FINANCEIRO`, `COMERCIAL`, `MARKETING`, `TI`, `JURIDICO`, `BDR` (e-mails `*@telun.com.br`, ou o domínio definido em **`SEED_EMAIL_DOMAIN`**). A senha inicial de todos vem da variável de ambiente **`SEED_ADMIN_PASSWORD`** — defina-a antes de rodar `npm run db:seed`.
+O seed cria 8 usuários, um por perfil: `SUPER_ADMIN`, `SOCIO_ADMIN`, `FINANCEIRO`, `COMERCIAL`, `MARKETING`, `TI`, `JURIDICO`, `BDR` (e-mails `*@telun.com.br`, ou o domínio definido em **`SEED_EMAIL_DOMAIN`**). A senha inicial de todos vem da variável de ambiente **`SEED_ADMIN_PASSWORD`**, que deve ter ao menos 12 caracteres. Defina-a antes de rodar `npm run db:seed`.
 
-> ⚠️ Defina `SEED_ADMIN_PASSWORD` e troque as senhas após o primeiro acesso.
+> ⚠️ Defina uma senha única e forte, proteja o arquivo `.env` e troque as senhas após o primeiro acesso. O seed nunca reativa, promove ou troca a senha de usuários já existentes. Para popular dados fictícios somente em desenvolvimento, use `SEED_DEMO_DATA=true`.
 
-## 6. Estrutura
+## 6. Validação
+
+```bash
+npm run lint
+npm test
+npm run test:finance
+npm run build
+npm audit
+```
+
+O teste integrado exige um PostgreSQL **descartável e exclusivo**, pois cria e
+remove registros dentro de uma transação:
+
+```bash
+ALLOW_INTEGRATION_TESTS=true npm run test:integration
+```
+
+## 7. Estrutura
 
 ```
 prisma/
@@ -116,7 +140,7 @@ src/
       marketing/  juridico/  metas/  tarefas/  configuracoes/
 ```
 
-## 7. Módulos
+## 8. Módulos
 
 | Módulo | CRUD | Destaques |
 | --- | --- | --- |
@@ -139,16 +163,16 @@ src/
 ### Gestão por Centro de Custo
 Centros oficiais: **1000** Financeiro · **2000** Comercial · **3000** Marketing · **4000** Inovação/TI · **5000** Jurídico. Cada CC tem responsável, orçamento (mensal/trimestral/anual), receitas/despesas por competência, metas, tarefas e dashboard próprio. Lançamentos, contratos, propostas, campanhas, projetos e tarefas carregam `costCenterId`.
 
-## 8. RBAC (perfis)
+## 9. RBAC (perfis)
 
 `SUPER_ADMIN` e `SOCIO_ADMIN` acessam tudo. Demais perfis têm módulos restritos
 (ver `src/lib/rbac.ts`). `VIEWER` é somente leitura. `BDR` vê apenas os próprios
 leads e tarefas. A navegação e as ações de escrita são filtradas por perfil.
 
-## 9. O que falta para produção
+## 10. O que falta para produção
 
-- **Senhas/seed**: trocar senhas padrão; remover dados de exemplo.
-- **Migrations versionadas**: migrar de `db push` para `prisma migrate` no deploy.
+- **Operação de credenciais**: rotacionar senhas iniciais e segredos, restringir o
+  `.env` e formalizar o processo de recuperação de conta.
 - **Decimal para dinheiro**: hoje os valores monetários são `Float` (escolha de
   MVP pela serialização limpa nos gráficos). Para contabilidade fiscal, migrar
   para `Decimal`/inteiro em centavos.
@@ -156,11 +180,12 @@ leads e tarefas. A navegação e as ações de escrita são filtradas por perfil
 - **Auditoria**: o modelo `AuditLog` existe no schema mas ainda não é gravado.
 - **Fase CC — pendências**: UI de **aprovações** (`ApprovalRequest` já no schema), tornar `costCenterId` obrigatório (hoje opcional + herança), categorias financeiras vinculadas a CC na UI, e bloco "Real × Orçado consolidado" no dashboard geral (já existe na página dedicada e por CC).
 - **Permissões por linha** mais finas além do BDR.
-- **Testes** automatizados (unit/e2e) e CI.
-- **Rate limiting / 2FA** no login; política de senha forte.
+- **Cobertura E2E e CI**: existem testes puros e um smoke integrado transacional,
+  mas ainda falta uma suíte E2E contínua.
+- **Rate limiting / 2FA** no login.
 - **Observabilidade** (logs estruturados, Sentry) e backups do banco.
 
-## 10. Próxima fase recomendada
+## 11. Próxima fase recomendada
 
 1. Recálculo automático de metas (ex.: meta de receita lê o financeiro).
 2. Importação de leads (CSV) e webhooks de formulários do site.
