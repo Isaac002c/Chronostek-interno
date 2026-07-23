@@ -28,6 +28,9 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL}
       AUTH_TRUST_HOST: "true"
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD deve ser definida}
+      SEED_EMAIL_DOMAIN: ${SEED_EMAIL_DOMAIN:-telun.com.br}
+      SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
       NODE_ENV: production
     ports:
       - "8080:3000"

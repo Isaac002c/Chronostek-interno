@@ -10,11 +10,28 @@ if [ ! -f .env ]; then
   {
     echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
     echo "AUTH_SECRET=$(openssl rand -base64 32 | tr -d '\n')"
+    echo "SEED_ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -d '\n')"
+    echo "SEED_EMAIL_DOMAIN=${SEED_EMAIL_DOMAIN:-telun.com.br}"
     echo "AUTH_URL=${AUTH_URL:-http://localhost:8080}"
   } > .env
   chmod 600 .env
   echo ".env gerado"
 fi
+
+if ! grep -q '^SEED_ADMIN_PASSWORD=.\{12,\}$' .env; then
+  seed_password="$(openssl rand -base64 24 | tr -d '\n')"
+  if grep -q '^SEED_ADMIN_PASSWORD=' .env; then
+    sed -i "s|^SEED_ADMIN_PASSWORD=.*$|SEED_ADMIN_PASSWORD=${seed_password}|" .env
+  else
+    echo "SEED_ADMIN_PASSWORD=${seed_password}" >> .env
+  fi
+  unset seed_password
+  echo "Senha inicial forte configurada no .env"
+fi
+if ! grep -q '^SEED_EMAIL_DOMAIN=' .env; then
+  echo "SEED_EMAIL_DOMAIN=${SEED_EMAIL_DOMAIN:-telun.com.br}" >> .env
+fi
+chmod 600 .env
 
 echo "== docker compose up --build (pode levar alguns minutos) =="
 docker compose up -d --build
@@ -39,10 +56,13 @@ if ! docker compose exec -T web npx prisma migrate deploy; then
 fi
 
 echo "== seed =="
-docker compose exec -T web npx prisma db seed || echo "seed: provavelmente ja populado"
+docker compose exec -T web npx prisma db seed
 
 docker compose ps
 echo ""
 echo "OK -> aplicacao no ar na porta 8080"
-echo "login: admin@${SEED_EMAIL_DOMAIN:-telun.com.br} (senha definida via SEED_ADMIN_PASSWORD)"
+seed_email_domain="$(sed -n 's/^SEED_EMAIL_DOMAIN=//p' .env | tail -n 1)"
+echo "login: admin@${seed_email_domain:-telun.com.br} (senha definida via SEED_ADMIN_PASSWORD)"
+unset seed_email_domain
+echo "credencial inicial armazenada em /opt/telun/.env (permissao 600); troque-a apos o primeiro acesso"
 echo "(se nao abrir externamente, rode: ufw allow 8080/tcp)"

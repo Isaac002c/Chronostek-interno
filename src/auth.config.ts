@@ -4,12 +4,13 @@ import type { Role } from "@prisma/client";
 // Configuração "edge-safe": sem Prisma e sem bcrypt, para poder rodar no
 // middleware (edge runtime). O provider Credentials é adicionado em auth.ts.
 export const authConfig = {
-  trustHost: true,
+  trustHost: process.env.AUTH_TRUST_HOST === "true",
   pages: {
     signIn: "/login",
   },
   session: {
     strategy: "jwt",
+    maxAge: 8 * 60 * 60,
   },
   providers: [],
   callbacks: {

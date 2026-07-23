@@ -21,6 +21,12 @@ function daysFromNow(d: number) {
 
 async function main() {
   console.log("🌱 Seed Telun — iniciando...");
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (!seedPassword || seedPassword.length < 12) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD é obrigatória e deve ter ao menos 12 caracteres.",
+    );
+  }
 
   // ───────────── Centros de custo ─────────────
   const costCentersData = [
@@ -65,7 +71,7 @@ async function main() {
   for (const c of categoriesData) {
     const rec = await prisma.financialCategory.upsert({
       where: { code: c.code },
-      update: { name: c.name, type: c.type, dreGroup: c.dreGroup },
+      update: { dreGroup: c.dreGroup },
       create: c,
     });
     categories[c.code] = rec.id;
@@ -79,7 +85,7 @@ async function main() {
   }
 
   // ───────────── Usuários ─────────────
-  const passwordHash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD ?? "changeme", 10);
+  const passwordHash = await bcrypt.hash(seedPassword, 12);
   const usersData = [
     { name: "Administrador Telun", email: `admin@${EMAIL_DOMAIN}`, role: "SUPER_ADMIN" as const, cc: 4000 },
     { name: "Sócio Diretor", email: `socio@${EMAIL_DOMAIN}`, role: "SOCIO_ADMIN" as const, cc: 1000 },
@@ -94,7 +100,8 @@ async function main() {
   for (const u of usersData) {
     const rec = await prisma.user.upsert({
       where: { email: u.email },
-      update: { name: u.name, role: u.role, status: "ATIVO", costCenterId: costCenters[u.cc] },
+      // Nunca reativa, promove ou sobrescreve uma conta administrada em produção.
+      update: {},
       create: {
         name: u.name,
         email: u.email,
@@ -116,8 +123,9 @@ async function main() {
     5000: { type: CostCenterType.JURIDICO, respRole: "JURIDICO", monthly: 500 },
   };
   for (const [codeStr, m] of Object.entries(ccMeta)) {
-    await prisma.costCenter.update({
-      where: { code: Number(codeStr) },
+    await prisma.costCenter.updateMany({
+      // Só preenche defaults no primeiro seed; não sobrescreve configuração real.
+      where: { code: Number(codeStr), responsibleUserId: null },
       data: {
         type: m.type,
         responsibleUserId: users[m.respRole],
@@ -127,7 +135,13 @@ async function main() {
     });
   }
 
-  // Evita duplicar dados transacionais em re-execuções.
+  if (process.env.SEED_DEMO_DATA !== "true") {
+    console.log("✅ Seed de referência concluído (dados de demonstração desativados).");
+    console.log(`   Login inicial: admin@${EMAIL_DOMAIN}`);
+    return;
+  }
+
+  // Evita duplicar dados transacionais de demonstração em re-execuções.
   const existingLeads = await prisma.lead.count();
   if (existingLeads > 0) {
     console.log("✓ Dados de exemplo já existem — pulando criação transacional.");
