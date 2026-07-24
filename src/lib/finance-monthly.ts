@@ -9,6 +9,8 @@ import { round2 } from "@/lib/finance-rules";
 export type AccountingRegime = "COMPETENCIA" | "CAIXA";
 
 export type MonthlyEntryInput = {
+  id?: string;
+  description?: string;
   type: FinancialType;
   value: number;
   paidValue: number | null;
@@ -18,6 +20,9 @@ export type MonthlyEntryInput = {
   competenceYear: number;
   dueDate: Date | null;
   paymentDate: Date | null;
+  categoryLabel?: string | null;
+  costCenterLabel?: string | null;
+  counterpartyLabel?: string | null;
 };
 
 export type MonthlyBudgetInput = {
@@ -45,6 +50,20 @@ export type MonthByMonthRow = {
   closingBalance: number;
   recurringRevenue: number;
   delinquency: number;
+};
+
+export type MonthlyLedgerItem = {
+  id: string;
+  description: string;
+  type: FinancialType;
+  value: number;
+  paidValue: number;
+  status: FinancialStatus;
+  recurring: boolean;
+  dueDate: Date | null;
+  categoryLabel: string | null;
+  costCenterLabel: string | null;
+  counterpartyLabel: string | null;
 };
 
 function monthOf(
@@ -80,6 +99,44 @@ function budgetForMonth(budgets: MonthlyBudgetInput[], month: number) {
     },
     { revenue: 0, expense: 0 },
   );
+}
+
+/**
+ * Livro-razão projetado: mantém cada lançamento individual dentro da
+ * competência/vencimento correspondente, sem consolidar itens de mesmo nome.
+ */
+export function buildMonthlyLedger(params: {
+  entries: MonthlyEntryInput[];
+  year: number;
+  regime: AccountingRegime;
+}): MonthlyLedgerItem[][] {
+  const months: MonthlyLedgerItem[][] = Array.from({ length: 12 }, () => []);
+  params.entries.forEach((entry, index) => {
+    if (entry.status === "CANCELADO") return;
+    const month = monthOf(entry, params.year, params.regime, false);
+    if (!month) return;
+    months[month - 1].push({
+      id: entry.id ?? `ledger-${month}-${index}`,
+      description: entry.description?.trim() || "Lançamento sem descrição",
+      type: entry.type,
+      value: round2(entry.value),
+      paidValue: round2(entry.paidValue ?? 0),
+      status: entry.status,
+      recurring: entry.recurring,
+      dueDate: entry.dueDate,
+      categoryLabel: entry.categoryLabel ?? null,
+      costCenterLabel: entry.costCenterLabel ?? null,
+      counterpartyLabel: entry.counterpartyLabel ?? null,
+    });
+  });
+  for (const entries of months) {
+    entries.sort((left, right) => {
+      const leftDate = left.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      const rightDate = right.dueDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
+      return leftDate - rightDate || left.description.localeCompare(right.description, "pt-BR");
+    });
+  }
+  return months;
 }
 
 export function buildMonthByMonth(params: {
@@ -192,6 +249,8 @@ export async function getMonthByMonth(params: {
         ],
       },
       select: {
+        id: true,
+        description: true,
         type: true,
         value: true,
         paidValue: true,
@@ -201,6 +260,11 @@ export async function getMonthByMonth(params: {
         competenceYear: true,
         dueDate: true,
         paymentDate: true,
+        category: { select: { code: true, name: true } },
+        costCenter: { select: { code: true, name: true } },
+        supplier: { select: { name: true } },
+        client: { select: { name: true } },
+        contract: { select: { title: true } },
       },
     }),
     prisma.budget.findMany({
@@ -224,14 +288,47 @@ export async function getMonthByMonth(params: {
     }),
   ]);
 
-  const months = buildMonthByMonth({
-    entries,
+  const monthlyEntries: MonthlyEntryInput[] = entries.map((entry) => ({
+    id: entry.id,
+    description: entry.description,
+    type: entry.type,
+    value: entry.value,
+    paidValue: entry.paidValue,
+    status: entry.status,
+    recurring: entry.recurring,
+    competenceMonth: entry.competenceMonth,
+    competenceYear: entry.competenceYear,
+    dueDate: entry.dueDate,
+    paymentDate: entry.paymentDate,
+    categoryLabel: entry.category
+      ? `${entry.category.code} ${entry.category.name}`
+      : null,
+    costCenterLabel: entry.costCenter
+      ? `${entry.costCenter.code} · ${entry.costCenter.name}`
+      : null,
+    counterpartyLabel:
+      entry.supplier?.name ??
+      entry.client?.name ??
+      entry.contract?.title ??
+      null,
+  }));
+  const summaryMonths = buildMonthByMonth({
+    entries: monthlyEntries,
     budgets,
     year: params.year,
     regime: params.regime,
     openingBalance: banks._sum.initialBalance ?? 0,
     ref: params.ref,
   });
+  const ledger = buildMonthlyLedger({
+    entries: monthlyEntries,
+    year: params.year,
+    regime: params.regime,
+  });
+  const months = summaryMonths.map((month) => ({
+    ...month,
+    ledger: ledger[month.month - 1],
+  }));
   const totals = months.reduce(
     (acc, month) => {
       acc.expectedRevenue += month.expectedRevenue;

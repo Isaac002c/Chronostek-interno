@@ -254,7 +254,19 @@ export function AccountsView({
                           <DeleteButton
                             action={deleteEntry.bind(null, r.id)}
                             iconOnly
-                            confirmMessage="Excluir este lançamento?"
+                            confirmMessage={
+                              r.recurringEntryId
+                                ? "Excluir definitivamente toda a recorrência, todas as ocorrências e todo o histórico? Esta ação não pode ser desfeita."
+                                : "Excluir este lançamento?"
+                            }
+                            successMessage={
+                              r.recurringEntryId
+                                ? "Recorrência e histórico excluídos definitivamente."
+                                : "Lançamento excluído."
+                            }
+                            confirmationText={
+                              r.recurringEntryId ? "EXCLUIR" : undefined
+                            }
                           />
                         </>
                       )}

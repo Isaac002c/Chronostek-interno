@@ -9,6 +9,7 @@ import { Button, type ButtonProps } from "@/components/ui/button";
 export function DeleteButton({
   action,
   confirmMessage = "Tem certeza que deseja excluir? Esta ação pode ser desfeita apenas no banco.",
+  confirmationText,
   successMessage = "Registro excluído.",
   redirectTo,
   children,
@@ -18,6 +19,7 @@ export function DeleteButton({
 }: {
   action: () => Promise<{ error?: string } | void>;
   confirmMessage?: string;
+  confirmationText?: string;
   successMessage?: string;
   redirectTo?: string;
   children?: React.ReactNode;
@@ -30,6 +32,15 @@ export function DeleteButton({
 
   function onClick() {
     if (!window.confirm(confirmMessage)) return;
+    if (
+      confirmationText &&
+      window.prompt(
+        `Para confirmar a exclusão definitiva, digite ${confirmationText}:`,
+      ) !== confirmationText
+    ) {
+      toast.error("Confirmação incorreta. Nenhum registro foi excluído.");
+      return;
+    }
     start(async () => {
       const res = await action();
       if (res && "error" in res && res.error) {

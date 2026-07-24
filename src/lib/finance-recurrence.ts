@@ -56,6 +56,14 @@ export class RecurrenceError extends Error {
   }
 }
 
+export type DeletedRecurringSeries = {
+  seriesId: string;
+  deletedOccurrences: number;
+  deletedHistory: number;
+  removedAuditLogs: number;
+  detachedTasks: number;
+};
+
 function asJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
@@ -513,6 +521,75 @@ export async function cancelRecurringOccurrences(params: {
         },
       });
       return targets.length;
+    },
+    { isolationLevel: "Serializable" },
+  );
+}
+
+/**
+ * Exclui fisicamente uma recorrência financeira, incluindo todas as
+ * ocorrências, o histórico da série e os logs de auditoria diretamente
+ * vinculados. Tarefas são preservadas, mas perdem o vínculo financeiro.
+ */
+export async function deleteRecurringSeries(params: {
+  seriesId: string;
+  confirmation: string;
+}): Promise<DeletedRecurringSeries> {
+  if (params.confirmation !== "EXCLUIR") {
+    throw new RecurrenceError(
+      'Confirme a exclusão definitiva informando "EXCLUIR".',
+    );
+  }
+  return prisma.$transaction(
+    async (tx) => {
+      const series = await tx.recurringEntry.findFirst({
+        where: {
+          id: params.seriesId,
+          tenantId: "default",
+          deletedAt: null,
+        },
+        include: {
+          generatedEntries: { select: { id: true } },
+        },
+      });
+      if (!series) throw new RecurrenceError("Série não encontrada.");
+
+      const entryIds = series.generatedEntries.map((entry) => entry.id);
+      const detachedTasks =
+        entryIds.length === 0
+          ? { count: 0 }
+          : await tx.task.updateMany({
+              where: { financialEntryId: { in: entryIds } },
+              data: { financialEntryId: null },
+            });
+      const removedAuditLogs = await tx.auditLog.deleteMany({
+        where: {
+          OR: [
+            { entity: "RecurringEntry", entityId: series.id },
+            { entity: "FinancialEntry", entityId: { in: entryIds } },
+          ],
+        },
+      });
+
+      await tx.recurringEntry.update({
+        where: { id: series.id },
+        data: { primaryEntryId: null },
+      });
+      const deletedOccurrences = await tx.financialEntry.deleteMany({
+        where: { recurringEntryId: series.id },
+      });
+      const deletedHistory = await tx.recurringEntryHistory.deleteMany({
+        where: { recurringEntryId: series.id },
+      });
+      await tx.recurringEntry.delete({ where: { id: series.id } });
+
+      return {
+        seriesId: series.id,
+        deletedOccurrences: deletedOccurrences.count,
+        deletedHistory: deletedHistory.count,
+        removedAuditLogs: removedAuditLogs.count,
+        detachedTasks: detachedTasks.count,
+      };
     },
     { isolationLevel: "Serializable" },
   );

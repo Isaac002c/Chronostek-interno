@@ -19,7 +19,10 @@ import {
   dreGroupFallback,
   type MonthProjectionInput,
 } from "../src/lib/finance-rules";
-import { buildMonthByMonth } from "../src/lib/finance-monthly";
+import {
+  buildMonthByMonth,
+  buildMonthlyLedger,
+} from "../src/lib/finance-monthly";
 import {
   DreFormulaError,
   evaluateDreFormulas,
@@ -258,6 +261,33 @@ test("Mês a Mês sempre retorna 12 meses, inclusive sem dados", () => {
   assert.equal(rows[11].closingBalance, 100);
 });
 
+test("livro-razão mensal mantém cada despesa recorrente projetada", () => {
+  const entries = Array.from({ length: 12 }, (_, index) => ({
+    id: `claude-${index + 1}`,
+    description: "Claude",
+    type: "DESPESA" as const,
+    value: 110,
+    paidValue: null,
+    status: "PENDENTE" as const,
+    recurring: true,
+    competenceMonth: index + 1,
+    competenceYear: 2026,
+    dueDate: new Date(2026, index, 10),
+    paymentDate: null,
+    categoryLabel: "Software",
+  }));
+  const ledger = buildMonthlyLedger({
+    entries,
+    year: 2026,
+    regime: "COMPETENCIA",
+  });
+  assert.equal(ledger.length, 12);
+  assert.ok(ledger.every((month) => month.length === 1));
+  assert.ok(ledger.every((month) => month[0].description === "Claude"));
+  assert.ok(ledger.every((month) => month[0].value === 110));
+  assert.ok(ledger.every((month) => month[0].recurring));
+});
+
 test("Mês a Mês separa previsto, realizado, parcial e inadimplência", () => {
   const rows = buildMonthByMonth({
     entries: [
@@ -447,8 +477,10 @@ test("projeção mantém manual, permite automático e contém as 12 linhas padr
 test("permissões financeiras são granulares no backend", () => {
   assert.equal(canFinance("SUPER_ADMIN", "PUBLISH_DRE"), true);
   assert.equal(canFinance("FINANCEIRO", "CANCEL_RECURRENCE"), true);
+  assert.equal(canFinance("FINANCEIRO", "DELETE_RECURRENCE"), true);
   assert.equal(canFinance("VIEWER", "VIEW"), true);
   assert.equal(canFinance("VIEWER", "EXPORT"), true);
+  assert.equal(canFinance("VIEWER", "DELETE_RECURRENCE"), false);
   assert.equal(canFinance("VIEWER", "EDIT_PROJECTION"), false);
   assert.equal(canFinance("COMERCIAL", "CREATE_RECURRENCE"), false);
 });

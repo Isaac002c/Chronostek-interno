@@ -1,12 +1,19 @@
 import Link from "next/link";
-import { CalendarRange, Download, Grid2X2, TableProperties } from "lucide-react";
+import {
+  CalendarRange,
+  Download,
+  Grid2X2,
+  ReceiptText,
+  TableProperties,
+} from "lucide-react";
 import { requireModule } from "@/lib/session";
 import { getMonthByMonth, type AccountingRegime } from "@/lib/finance-monthly";
 import { getCostCenterOptions } from "@/lib/options";
-import { formatCurrency, monthShort } from "@/lib/format";
+import { formatCurrency, formatDate, monthShort } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
 import {
   Table,
@@ -54,7 +61,7 @@ export default async function MonthByMonthPage({
   const regime: AccountingRegime =
     one(sp.regime) === "CAIXA" ? "CAIXA" : "COMPETENCIA";
   const costCenterId = one(sp.costCenterId) || null;
-  const view = one(sp.view) === "cards" ? "cards" : "table";
+  const view = one(sp.view) === "table" ? "table" : "cards";
   const [data, costCenters] = await Promise.all([
     getMonthByMonth({ year, regime, costCenterId }),
     getCostCenterOptions(),
@@ -69,7 +76,7 @@ export default async function MonthByMonthPage({
     <>
       <PageHeader
         title="Mês a Mês"
-        description={`Visão consolidada dos 12 meses de ${year} pelo regime de ${regime === "CAIXA" ? "caixa" : "competência"}.`}
+        description={`Indicadores e livro-razão projetado dos 12 meses de ${year} pelo regime de ${regime === "CAIXA" ? "caixa" : "competência"}.`}
       >
         <Button asChild variant="outline">
           <Link href={`/api/finance/month-by-month/export?${query.toString()}`}>
@@ -151,38 +158,157 @@ export default async function MonthByMonthPage({
       </div>
 
       {view === "cards" ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid items-start gap-7 xl:grid-cols-2">
           {data.months.map((month) => (
-            <Link
+            <Card
               key={month.month}
-              href={`/dashboard/financeiro/lancamentos?month=${month.month}&year=${year}`}
-              className="block"
+              className="overflow-hidden border-2 shadow-sm"
             >
-              <Card className="h-full p-5 transition-colors hover:border-primary/50">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="flex items-center gap-2 font-semibold">
-                    <CalendarRange className="size-4 text-primary" />
-                    {monthShort(month.month)}
-                  </h2>
-                  <span
-                    className={cn(
-                      "font-semibold tabular-nums",
-                      month.realizedResult < 0 ? "text-error" : "text-success",
-                    )}
-                  >
-                    {formatCurrency(month.realizedResult)}
-                  </span>
+              <div className="border-b bg-muted/30 p-5">
+                <div className="mb-5 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="flex items-center gap-2 text-lg font-semibold capitalize">
+                      <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                        <CalendarRange className="size-4 text-primary" />
+                      </span>
+                      {monthShort(month.month)} de {year}
+                    </h2>
+                    <p className="mt-1 pl-11 text-xs text-muted-foreground">
+                      {month.ledger.length} lançamento
+                      {month.ledger.length === 1 ? "" : "s"} projetado
+                      {month.ledger.length === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <Button asChild variant="outline" size="sm">
+                    <Link
+                      href={`/dashboard/financeiro/lancamentos?month=${month.month}&year=${year}`}
+                    >
+                      Ver mês
+                    </Link>
+                  </Button>
                 </div>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                  {METRICS.map(([key, label]) => (
-                    <div key={key}>
-                      <dt className="text-muted-foreground">{label}</dt>
-                      <dd className="font-medium tabular-nums">{formatCurrency(month[key])}</dd>
+
+                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {[
+                    ["Receitas", month.expectedRevenue, "text-success"],
+                    ["Despesas", month.expectedExpense, "text-error"],
+                    [
+                      "Resultado",
+                      month.expectedResult,
+                      month.expectedResult < 0 ? "text-error" : "text-success",
+                    ],
+                    [
+                      "Realizado",
+                      month.realizedResult,
+                      month.realizedResult < 0 ? "text-error" : "text-success",
+                    ],
+                  ].map(([label, value, tone]) => (
+                    <div
+                      key={String(label)}
+                      className="rounded-xl border bg-card p-3"
+                    >
+                      <dt className="text-[11px] text-muted-foreground">
+                        {label}
+                      </dt>
+                      <dd
+                        className={cn(
+                          "mt-1 text-sm font-semibold tabular-nums",
+                          String(tone),
+                        )}
+                      >
+                        {formatCurrency(Number(value))}
+                      </dd>
                     </div>
                   ))}
                 </dl>
-              </Card>
-            </Link>
+              </div>
+
+              <div className="p-5">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="flex items-center gap-2 text-sm font-semibold">
+                      <ReceiptText className="size-4 text-primary" />
+                      Livro-razão projetado
+                    </h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Cada receita e despesa prevista nesta competência.
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded-full bg-muted px-2.5 py-1 text-xs font-semibold tabular-nums",
+                      month.expectedResult < 0 ? "text-error" : "text-success",
+                    )}
+                  >
+                    Saldo {formatCurrency(month.expectedResult)}
+                  </span>
+                </div>
+
+                {month.ledger.length === 0 ? (
+                  <div className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                    Nenhum lançamento projetado para este mês.
+                  </div>
+                ) : (
+                  <div className="divide-y overflow-hidden rounded-xl border">
+                    {month.ledger.map((entry) => (
+                      <Link
+                        key={entry.id}
+                        href={`/dashboard/financeiro/lancamentos/${entry.id}/edit`}
+                        className="grid gap-2 p-3 transition-colors hover:bg-muted/40 sm:grid-cols-[1fr_auto]"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="truncate text-sm font-medium">
+                              {entry.description}
+                            </span>
+                            <Badge
+                              tone={
+                                entry.type === "RECEITA" ? "success" : "danger"
+                              }
+                            >
+                              {entry.type === "RECEITA"
+                                ? "Receita"
+                                : "Despesa"}
+                            </Badge>
+                            {entry.recurring && (
+                              <Badge tone="info">Recorrente</Badge>
+                            )}
+                          </div>
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {[
+                              entry.counterpartyLabel,
+                              entry.categoryLabel,
+                              entry.costCenterLabel,
+                              entry.dueDate
+                                ? `Vence ${formatDate(entry.dueDate)}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "Sem classificação complementar"}
+                          </p>
+                        </div>
+                        <div className="text-left sm:text-right">
+                          <p
+                            className={cn(
+                              "text-sm font-semibold tabular-nums",
+                              entry.type === "RECEITA"
+                                ? "text-success"
+                                : "text-error",
+                            )}
+                          >
+                            {entry.type === "RECEITA" ? "+" : "−"}
+                            {formatCurrency(entry.value)}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {entry.status.toLocaleLowerCase("pt-BR")}
+                          </p>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Card>
           ))}
         </div>
       ) : (

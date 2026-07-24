@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { authorizeFinanceApi, apiError } from "@/lib/finance-api";
 import {
   cancelRecurringOccurrences,
+  deleteRecurringSeries,
   updateRecurringOccurrences,
 } from "@/lib/finance-recurrence";
 
@@ -38,6 +39,10 @@ const cancelSchema = z.object({
   scope,
   confirmSettled: z.boolean().default(false),
   reason: z.string().trim().min(1),
+});
+const permanentDeleteSchema = z.object({
+  permanent: z.literal(true),
+  confirmation: z.literal("EXCLUIR"),
 });
 
 export async function GET(
@@ -94,11 +99,27 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeFinanceApi("CANCEL_RECURRENCE");
-  if ("response" in auth) return auth.response;
   try {
+    const rawBody: unknown = await request.json();
+    const permanent =
+      typeof rawBody === "object" &&
+      rawBody !== null &&
+      "permanent" in rawBody &&
+      rawBody.permanent === true;
+    const auth = await authorizeFinanceApi(
+      permanent ? "DELETE_RECURRENCE" : "CANCEL_RECURRENCE",
+    );
+    if ("response" in auth) return auth.response;
     const { id } = await context.params;
-    const body = cancelSchema.parse(await request.json());
+    if (permanent) {
+      const body = permanentDeleteSchema.parse(rawBody);
+      const deleted = await deleteRecurringSeries({
+        seriesId: id,
+        confirmation: body.confirmation,
+      });
+      return NextResponse.json({ data: deleted });
+    }
+    const body = cancelSchema.parse(rawBody);
     const affected = await cancelRecurringOccurrences({
       seriesId: id,
       ...body,

@@ -243,7 +243,23 @@ export default async function LancamentosPage({
                               <Pencil />
                             </Link>
                           </Button>
-                          <DeleteButton action={deleteEntry.bind(null, e.id)} iconOnly confirmMessage="Excluir este lançamento?" />
+                          <DeleteButton
+                            action={deleteEntry.bind(null, e.id)}
+                            iconOnly
+                            confirmMessage={
+                              e.recurringEntryId
+                                ? "Excluir definitivamente toda a recorrência, todas as ocorrências e todo o histórico? Esta ação não pode ser desfeita."
+                                : "Excluir este lançamento?"
+                            }
+                            successMessage={
+                              e.recurringEntryId
+                                ? "Recorrência e histórico excluídos definitivamente."
+                                : "Lançamento excluído."
+                            }
+                            confirmationText={
+                              e.recurringEntryId ? "EXCLUIR" : undefined
+                            }
+                          />
                         </>
                       )}
                     </div>

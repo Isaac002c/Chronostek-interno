@@ -9,6 +9,7 @@ export type FinancePermission =
   | "CREATE_RECURRENCE"
   | "EDIT_RECURRENCE"
   | "CANCEL_RECURRENCE"
+  | "DELETE_RECURRENCE"
   | "EDIT_PROJECTION"
   | "PUBLISH_PROJECTION"
   | "CONFIGURE_DRE"
@@ -30,4 +31,3 @@ export function canFinance(
   if (role === "VIEWER") return READ_ONLY.has(permission);
   return permission === "VIEW";
 }
-

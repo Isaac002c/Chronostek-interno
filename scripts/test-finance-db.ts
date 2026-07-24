@@ -30,6 +30,7 @@ const created = {
   bankId: "",
   paymentMethodId: "",
   productId: "",
+  taskId: "",
 };
 
 async function main() {
@@ -37,6 +38,7 @@ async function main() {
   const {
     cancelRecurringOccurrences,
     createRecurringSeries,
+    deleteRecurringSeries,
     updateRecurringOccurrences,
   } = await import("../src/lib/finance-recurrence");
   const {
@@ -101,6 +103,7 @@ async function main() {
       where: { recurringEntryId: first.seriesId },
       orderBy: { recurrenceSequence: "asc" },
       select: {
+        id: true,
         dueDate: true,
         recurrenceSequence: true,
         contractId: true,
@@ -153,6 +156,52 @@ async function main() {
         userId: user.id,
       }),
     );
+
+    const linkedTask = await prisma.task.create({
+      data: {
+        title: `Tarefa recorrência ${suffix}`,
+        module: "FINANCEIRO",
+        financialEntryId: dates[0].id,
+        createdById: user.id,
+      },
+    });
+    created.taskId = linkedTask.id;
+    const deleted = await deleteRecurringSeries({
+      seriesId: first.seriesId,
+      confirmation: "EXCLUIR",
+    });
+    assert.equal(deleted.deletedOccurrences, 4);
+    assert.ok(deleted.deletedHistory >= 3);
+    assert.ok(deleted.removedAuditLogs >= 1);
+    assert.equal(deleted.detachedTasks, 1);
+    assert.equal(
+      await prisma.recurringEntry.count({ where: { id: first.seriesId } }),
+      0,
+    );
+    assert.equal(
+      await prisma.financialEntry.count({
+        where: { recurringEntryId: first.seriesId },
+      }),
+      0,
+    );
+    assert.equal(
+      await prisma.recurringEntryHistory.count({
+        where: { recurringEntryId: first.seriesId },
+      }),
+      0,
+    );
+    assert.equal(
+      await prisma.auditLog.count({
+        where: { entity: "RecurringEntry", entityId: first.seriesId },
+      }),
+      0,
+    );
+    const detachedTask = await prisma.task.findUniqueOrThrow({
+      where: { id: linkedTask.id },
+      select: { financialEntryId: true },
+    });
+    assert.equal(detachedTask.financialEntryId, null);
+    created.seriesId = "";
 
     console.log("Finance DB — projeção manual/histórico/restauração");
     const projection = await createProjection(
@@ -275,7 +324,14 @@ async function main() {
     console.log("Finance DB — todos os testes passaram.");
   } finally {
     await prisma.$transaction(async (tx) => {
+      if (created.taskId) {
+        await tx.task.deleteMany({ where: { id: created.taskId } });
+      }
       if (created.seriesId) {
+        await tx.recurringEntry.updateMany({
+          where: { id: created.seriesId },
+          data: { primaryEntryId: null },
+        });
         await tx.financialEntry.deleteMany({
           where: { recurringEntryId: created.seriesId },
         });

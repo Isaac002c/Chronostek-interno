@@ -162,6 +162,7 @@ export type AccountRow = {
   paymentDate: Date | null;
   status: FinancialStatus;
   recurring: boolean;
+  recurringEntryId: string | null;
   installmentNumber: number | null;
   installments: number | null;
   categoryLabel: string | null;
@@ -239,6 +240,7 @@ export async function getAccounts(
       paymentDate: e.paymentDate,
       status: e.status,
       recurring: e.recurring,
+      recurringEntryId: e.recurringEntryId,
       installmentNumber: e.installmentNumber,
       installments: e.installments,
       categoryLabel: e.category ? `${e.category.code} ${e.category.name}` : null,

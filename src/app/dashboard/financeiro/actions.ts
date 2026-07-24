@@ -28,6 +28,7 @@ import {
 import {
   cancelRecurringOccurrences,
   createRecurringSeries,
+  deleteRecurringSeries,
   updateRecurringOccurrences,
 } from "@/lib/finance-recurrence";
 import type { RecurrenceScope } from "@/lib/finance-rules";
@@ -335,10 +336,14 @@ export async function deleteEntry(id: string): Promise<ActionState> {
     });
     if (!before) return { error: "Lançamento não encontrado." };
     if (before.recurringEntryId) {
-      return {
-        error:
-          "Lançamentos de uma série devem ser cancelados com escopo e justificativa.",
-      };
+      const deleteAuth = await requireFinancePermission("DELETE_RECURRENCE");
+      if ("error" in deleteAuth) return deleteAuth;
+      await deleteRecurringSeries({
+        seriesId: before.recurringEntryId,
+        confirmation: "EXCLUIR",
+      });
+      revalidateFinance();
+      return { ok: true };
     }
     await prisma.financialEntry.update({
       where: { id },
@@ -351,8 +356,13 @@ export async function deleteEntry(id: string): Promise<ActionState> {
       entityId: id,
       before,
     });
-  } catch {
-    return { error: "Não foi possível excluir o lançamento." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível excluir o lançamento.",
+    };
   }
 
   revalidateFinance();

@@ -19,8 +19,9 @@ import {
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DeleteButton } from "@/components/form/delete-button";
 import { EntryForm } from "../../../entry-form";
-import { updateEntry } from "../../../actions";
+import { deleteEntry, updateEntry } from "../../../actions";
 import { CancelRecurringForm } from "./cancel-recurring-form";
 import { PartialSettlementForm } from "./partial-settlement-form";
 
@@ -135,12 +136,31 @@ export default async function EditEntryPage({
         <Card className="border-error/30 p-5">
           <h2 className="mb-1 text-sm font-semibold">Cancelar recorrência</h2>
           <p className="mb-4 text-xs text-muted-foreground">
-            O histórico liquidado nunca é excluído. Escolha o alcance e justifique.
+            Cancelar mantém a série e seu histórico. Escolha o alcance e justifique.
           </p>
           <CancelRecurringForm
             entryId={entry.id}
             occurrenceNumber={entry.recurrenceSequence}
           />
+          <div className="mt-6 border-t border-error/20 pt-5">
+            <h3 className="mb-1 text-sm font-semibold text-error">
+              Excluir recorrência definitivamente
+            </h3>
+            <p className="mb-4 max-w-3xl text-xs text-muted-foreground">
+              Remove toda a série, todas as ocorrências — inclusive pagas — e
+              todo o histórico relacionado. Esta ação não pode ser desfeita.
+            </p>
+            <DeleteButton
+              action={deleteEntry.bind(null, entry.id)}
+              redirectTo="/dashboard/financeiro/lancamentos"
+              variant="outline"
+              confirmMessage="Excluir definitivamente toda a recorrência, todas as ocorrências e todo o histórico? Esta ação não pode ser desfeita."
+              confirmationText="EXCLUIR"
+              successMessage="Recorrência e histórico excluídos definitivamente."
+            >
+              Excluir toda a recorrência
+            </DeleteButton>
+          </div>
         </Card>
       )}
     </>
