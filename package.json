@@ -19,6 +19,7 @@
     "test:auth": "tsx scripts/test-auth-security.ts",
     "test:finance": "tsx scripts/test-finance.ts",
     "test:integration": "tsx scripts/test-integration.ts",
+    "test:deploy": "tsx scripts/test-deployment-contract.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

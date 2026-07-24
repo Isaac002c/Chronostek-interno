@@ -1,0 +1,4 @@
+*
+!vercel.json
+!vercel-proxy/
+!vercel-proxy/**

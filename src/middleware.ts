@@ -7,7 +7,8 @@ export default NextAuth(authConfig).auth;
 
 export const config = {
   matcher: [
-    // Protege tudo, exceto rotas internas/estáticas e a API de auth.
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|ico|webp)$).*)",
+    // Protege tudo, exceto health, rotas internas/estáticas e a API de auth.
+    // O health não deve inicializar Auth.js nem emitir cookies.
+    "/((?!api/auth|api/health|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|ico|webp)$).*)",
   ],
 };
