@@ -6,6 +6,17 @@
  */
 import { randomUUID } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
+import {
+  buildLoginThrottleBuckets,
+  clearLoginFailures,
+  loginBlockedUntil,
+  recordLoginFailure,
+} from "../src/lib/auth-throttle";
+import { runSerializableTransaction } from "../src/lib/transaction";
+import {
+  assertActiveSuperAdminInvariant,
+  LastActiveSuperAdminError,
+} from "../src/lib/user-security";
 
 if (process.env.ALLOW_INTEGRATION_TESTS !== "true") {
   console.error(
@@ -24,7 +35,7 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Falha: ${message}`);
 }
 
-async function main() {
+async function testTransactionalCrud() {
   try {
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -137,7 +148,128 @@ async function main() {
     (await prisma.user.count({ where: { email } })) === 0,
     "a transação de teste deve ser revertida",
   );
-  console.log("✓ migrations, transação, CRUD e relações validados; rollback confirmado");
+  console.log("✓ transação, CRUD e relações validados; rollback confirmado");
+}
+
+async function testLoginThrottle() {
+  const request = new Request(
+    "https://integration.test/api/auth/callback/credentials",
+    { headers: { "x-forwarded-for": "203.0.113.50" } },
+  );
+  const buckets = buildLoginThrottleBuckets(email, request, {
+    secret: `integration-secret-${token}`,
+    trustProxy: true,
+  });
+  const now = new Date();
+
+  await clearLoginFailures(buckets);
+  try {
+    for (let attempt = 1; attempt < 5; attempt += 1) {
+      const result = await recordLoginFailure(buckets, now);
+      assert(!result.newlyBlocked, `tentativa ${attempt} não deve bloquear`);
+    }
+    assert(
+      (await loginBlockedUntil(buckets, now)) === null,
+      "quatro falhas não devem bloquear",
+    );
+
+    const fifth = await recordLoginFailure(buckets, now);
+    assert(fifth.newlyBlocked, "a quinta falha deve iniciar o bloqueio");
+    assert(
+      (await loginBlockedUntil(buckets, now)) != null,
+      "o bloqueio deve ser persistido",
+    );
+  } finally {
+    await clearLoginFailures(buckets);
+  }
+
+  assert(
+    (await loginBlockedUntil(buckets, now)) === null,
+    "sucesso/limpeza deve remover o bloqueio",
+  );
+  console.log("✓ rate limiting persistente e limpeza validados");
+}
+
+async function testConcurrentSuperAdminInvariant() {
+  const existingUsers = await prisma.user.count();
+  if (existingUsers !== 0) {
+    console.log(
+      "↷ concorrência de SUPER_ADMIN ignorada: o banco descartável não está vazio",
+    );
+    return;
+  }
+
+  const emails = [
+    `super-a-${token}@test.invalid`,
+    `super-b-${token}@test.invalid`,
+  ];
+  const created = await prisma.user.createManyAndReturn({
+    data: emails.map((adminEmail, index) => ({
+      name: `Concurrent Admin ${index + 1}`,
+      email: adminEmail,
+      passwordHash: "not-a-login-credential",
+      role: "SUPER_ADMIN" as const,
+      status: "ATIVO" as const,
+    })),
+    select: { id: true },
+  });
+
+  try {
+    const demotions = await Promise.allSettled(
+      created.map((admin) =>
+        runSerializableTransaction(async (tx) => {
+          const current = await tx.user.findUniqueOrThrow({
+            where: { id: admin.id },
+            select: { role: true, status: true },
+          });
+          await assertActiveSuperAdminInvariant(tx, admin.id, current, {
+            role: "VIEWER",
+            status: "ATIVO",
+          });
+          await tx.user.update({
+            where: { id: admin.id },
+            data: { role: "VIEWER" },
+          });
+        }),
+      ),
+    );
+
+    const fulfilled = demotions.filter(
+      (result) => result.status === "fulfilled",
+    ).length;
+    const rejected = demotions.filter(
+      (result) =>
+        result.status === "rejected" &&
+        result.reason instanceof LastActiveSuperAdminError,
+    ).length;
+    assert(fulfilled === 1, "somente um rebaixamento concorrente deve concluir");
+    assert(
+      rejected === 1,
+      "o segundo rebaixamento deve preservar o último SUPER_ADMIN",
+    );
+    assert(
+      (await prisma.user.count({
+        where: {
+          email: { in: emails },
+          role: "SUPER_ADMIN",
+          status: "ATIVO",
+          deletedAt: null,
+        },
+      })) === 1,
+      "deve restar exatamente um SUPER_ADMIN ativo",
+    );
+  } finally {
+    await prisma.user.deleteMany({ where: { email: { in: emails } } });
+  }
+
+  console.log("✓ invariante concorrente de SUPER_ADMIN validada");
+}
+
+async function main() {
+  await testTransactionalCrud();
+  await testLoginThrottle();
+  await testConcurrentSuperAdminInvariant();
+  console.log("✓ migrations e controles de autenticação validados");
 }
 
 main()

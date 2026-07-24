@@ -8,6 +8,11 @@ import { Prisma, Role, UserStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/rbac";
+import { runSerializableTransaction } from "@/lib/transaction";
+import {
+  assertActiveSuperAdminInvariant,
+  LastActiveSuperAdminError,
+} from "@/lib/user-security";
 import {
   zodFieldErrors,
   str,
@@ -24,6 +29,17 @@ async function requireAdmin(): Promise<
   if (!isAdmin(u.role)) return { error: "Apenas administradores." };
   return { userId: u.id };
 }
+
+class UserNotFoundError extends Error {}
+
+const auditedUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  status: true,
+  costCenterId: true,
+} satisfies Prisma.UserSelect;
 
 const baseSchema = {
   name: z.string().min(1, "Informe o nome."),
@@ -69,9 +85,27 @@ export async function createUser(
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
 
   const { password, ...rest } = parsed.data;
+  const passwordHash = await bcrypt.hash(password, 12);
   try {
-    await prisma.user.create({
-      data: { ...rest, passwordHash: await bcrypt.hash(password, 12) },
+    await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: { ...rest, passwordHash },
+        select: auditedUserSelect,
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: auth.userId,
+          action: "create",
+          entity: "User",
+          entityId: created.id,
+          metadata: {
+            before: null,
+            after: created,
+            passwordChanged: true,
+            origin: "app",
+          },
+        },
+      });
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -96,35 +130,48 @@ export async function updateUser(
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
 
   const { password, ...rest } = parsed.data;
-  const existing = await prisma.user.findFirst({
-    where: { id, deletedAt: null },
-    select: { role: true, status: true },
-  });
-  if (!existing) return { error: "Usuário não encontrado." };
-  if (
-    existing.role === "SUPER_ADMIN" &&
-    existing.status === "ATIVO" &&
-    (rest.role !== "SUPER_ADMIN" || rest.status !== "ATIVO")
-  ) {
-    const otherSuperAdmins = await prisma.user.count({
-      where: {
-        id: { not: id },
-        role: "SUPER_ADMIN",
-        status: "ATIVO",
-        deletedAt: null,
-      },
-    });
-    if (otherSuperAdmins === 0)
-      return { error: "Mantenha ao menos um superadministrador ativo." };
-  }
   const data: Prisma.UserUpdateInput = { ...rest };
   if (password && password.length >= 12) {
     data.passwordHash = await bcrypt.hash(password, 12);
   }
 
   try {
-    await prisma.user.update({ where: { id }, data });
+    await runSerializableTransaction(async (tx) => {
+      const existing = await tx.user.findFirst({
+        where: { id, deletedAt: null },
+        select: auditedUserSelect,
+      });
+      if (!existing) throw new UserNotFoundError();
+
+      await assertActiveSuperAdminInvariant(tx, id, existing, {
+        role: rest.role,
+        status: rest.status,
+      });
+
+      const updated = await tx.user.update({
+        where: { id },
+        data,
+        select: auditedUserSelect,
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: auth.userId,
+          action: "update",
+          entity: "User",
+          entityId: id,
+          metadata: {
+            before: existing,
+            after: updated,
+            passwordChanged: Boolean(password),
+            origin: "app",
+          },
+        },
+      });
+    });
   } catch (e) {
+    if (e instanceof UserNotFoundError)
+      return { error: "Usuário não encontrado." };
+    if (e instanceof LastActiveSuperAdminError) return { error: e.message };
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return { fieldErrors: { email: ["Já existe um usuário com este e-mail."] } };
     }
@@ -142,28 +189,43 @@ export async function deleteUser(id: string): Promise<ActionState> {
     return { error: "Você não pode excluir o próprio usuário." };
 
   try {
-    const existing = await prisma.user.findFirst({
-      where: { id, deletedAt: null },
-      select: { role: true, status: true },
-    });
-    if (!existing) return { error: "Usuário não encontrado." };
-    if (existing.role === "SUPER_ADMIN" && existing.status === "ATIVO") {
-      const otherSuperAdmins = await prisma.user.count({
-        where: {
-          id: { not: id },
-          role: "SUPER_ADMIN",
-          status: "ATIVO",
-          deletedAt: null,
+    await runSerializableTransaction(async (tx) => {
+      const existing = await tx.user.findFirst({
+        where: { id, deletedAt: null },
+        select: auditedUserSelect,
+      });
+      if (!existing) throw new UserNotFoundError();
+
+      await assertActiveSuperAdminInvariant(tx, id, existing, {
+        role: existing.role,
+        status: "INATIVO",
+      });
+
+      const deletedAt = new Date();
+      const deleted = await tx.user.update({
+        where: { id },
+        data: { deletedAt, status: "INATIVO" },
+        select: auditedUserSelect,
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: auth.userId,
+          action: "delete",
+          entity: "User",
+          entityId: id,
+          metadata: {
+            before: existing,
+            after: { ...deleted, deletedAt: deletedAt.toISOString() },
+            origin: "app",
+          },
         },
       });
-      if (otherSuperAdmins === 0)
-        return { error: "Mantenha ao menos um superadministrador ativo." };
-    }
-    await prisma.user.update({
-      where: { id },
-      data: { deletedAt: new Date(), status: "INATIVO" },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof UserNotFoundError)
+      return { error: "Usuário não encontrado." };
+    if (error instanceof LastActiveSuperAdminError)
+      return { error: error.message };
     return { error: "Não foi possível excluir o usuário." };
   }
 

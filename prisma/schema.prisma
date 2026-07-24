@@ -1379,6 +1379,18 @@ model AuditLog {
   @@index([createdAt])
 }
 
+// Contadores persistentes de tentativas de login. A chave é um HMAC e não
+// armazena e-mail ou IP em texto puro.
+model LoginThrottle {
+  key             String    @id
+  failureCount    Int       @default(0)
+  windowStartedAt DateTime  @default(now())
+  blockedUntil    DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@index([updatedAt])
+}
+
 // ─────────────────────────────── FINANCEIRO (cadastros e controle) ───────────────────────────────
 
 /**

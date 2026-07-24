@@ -31,7 +31,14 @@ export async function writeAudit(params: {
         },
       },
     });
-  } catch {
-    // silencioso de propósito
+  } catch (error) {
+    // Não derruba a operação principal, mas deixa sinal operacional sem expor
+    // o conteúdo potencialmente sensível de before/after.
+    console.error("[audit] falha ao persistir evento", {
+      action: params.action,
+      entity: params.entity,
+      entityId: params.entityId ?? null,
+      error: error instanceof Error ? error.message : "erro desconhecido",
+    });
   }
 }

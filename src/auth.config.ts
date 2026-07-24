@@ -12,6 +12,15 @@ export const authConfig = {
     strategy: "jwt",
     maxAge: 8 * 60 * 60,
   },
+  logger: {
+    error(error) {
+      // Credenciais inválidas são um resultado esperado, já protegido pelo
+      // rate limiter. Evita stack traces por tentativa sem ocultar falhas reais.
+      if ((error as Error & { type?: string }).type === "CredentialsSignin")
+        return;
+      console.error("[auth]", error);
+    },
+  },
   providers: [],
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {

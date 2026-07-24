@@ -18,7 +18,9 @@ ssh -i $key -o StrictHostKeyChecking=accept-new $vps "rm -rf /opt/telun && mkdir
 ```
 
 Acesso: **http://<VPS_IP>:8080**. As credenciais iniciais são geradas pelo seed (veja a seção 5).
-Para HTTPS (cookies seguros), aponte um domínio para a VPS e coloque um proxy TLS (Caddy/Nginx) na frente — o app já confia no host (`AUTH_TRUST_HOST`).
+Para HTTPS (cookies seguros), aponte um domínio para a VPS e coloque um proxy TLS
+(Caddy/Nginx) na frente. Habilite `AUTH_TRUST_PROXY=true` somente se o proxy
+sobrescrever os headers de origem e a porta direta do app não estiver pública.
 
 ---
 
@@ -44,6 +46,7 @@ SEED_ADMIN_PASSWORD="gere-uma-senha-unica-e-forte"
 # Produção:
 # AUTH_URL="https://interno.telun.com.br"
 # AUTH_TRUST_HOST="true" # apenas atrás de proxy confiável
+# AUTH_TRUST_PROXY="true" # somente se o proxy controlar X-Forwarded-For
 
 # Dados fictícios são opt-in e devem ficar desativados em produção
 SEED_DEMO_DATA="false"
@@ -103,13 +106,15 @@ O seed cria 8 usuários, um por perfil: `SUPER_ADMIN`, `SOCIO_ADMIN`, `FINANCEIR
 ```bash
 npm run lint
 npm test
+npm run test:auth
 npm run test:finance
 npm run build
 npm audit
 ```
 
-O teste integrado exige um PostgreSQL **descartável e exclusivo**, pois cria e
-remove registros dentro de uma transação:
+O teste integrado exige um PostgreSQL **descartável, exclusivo e preferencialmente
+vazio**. Ele valida rollback, rate limiting e concorrência real, criando e
+removendo registros temporários:
 
 ```bash
 ALLOW_INTEGRATION_TESTS=true npm run test:integration
@@ -119,7 +124,7 @@ ALLOW_INTEGRATION_TESTS=true npm run test:integration
 
 ```
 prisma/
-  schema.prisma        # 18 modelos + enums
+  schema.prisma        # modelos, relações e enums
   seed.ts              # dados iniciais
 src/
   auth.ts              # Auth.js v5 (Credentials + bcrypt)
@@ -153,7 +158,7 @@ src/
 | Jurídico | ✅ | Contratos jurídicos, NDAs, prazos com alerta de atraso |
 | Metas | ✅ | Progresso por período/centro de custo |
 | Tarefas | ✅ | Polimórficas, filtros, conclusão rápida, atrasadas no dashboard |
-| Config/Usuários | ✅ | RBAC, criação de usuários, perfis |
+| Config/Usuários | ✅ | RBAC, criação de usuários, perfis, auditoria e proteção do último SUPER_ADMIN |
 | **Centros de Custo** | ✅ | CRUD (tipo, responsável, hierarquia, orçamento padrão) + dashboard por CC com abas (visão geral, orçamento, financeiro, metas, tarefas) |
 | **Orçamentos** | ✅ | Budget mensal/trimestral/anual por CC, fluxo rascunho→aprovado→ativo→encerrado |
 | **Real × Orçado** | ✅ | Variação R$/% por CC e categoria, gráfico, alertas de estouro/queda |
@@ -177,12 +182,15 @@ leads e tarefas. A navegação e as ações de escrita são filtradas por perfil
   MVP pela serialização limpa nos gráficos). Para contabilidade fiscal, migrar
   para `Decimal`/inteiro em centavos.
 - **Paginação** nas listagens (hoje `take: 100/200`).
-- **Auditoria**: o modelo `AuditLog` existe no schema mas ainda não é gravado.
+- **Auditoria ampliada**: login, metas, financeiro, empresa e ciclo de usuários
+  já são registrados; ainda falta cobrir todas as entidades e oferecer uma tela
+  administrativa consolidada.
 - **Fase CC — pendências**: UI de **aprovações** (`ApprovalRequest` já no schema), tornar `costCenterId` obrigatório (hoje opcional + herança), categorias financeiras vinculadas a CC na UI, e bloco "Real × Orçado consolidado" no dashboard geral (já existe na página dedicada e por CC).
 - **Permissões por linha** mais finas além do BDR.
 - **Cobertura E2E e CI**: existem testes puros e um smoke integrado transacional,
   mas ainda falta uma suíte E2E contínua.
-- **Rate limiting / 2FA** no login.
+- **2FA e recuperação de conta**: o login já possui rate limiting persistente,
+  mas ainda não há segundo fator nem fluxo automatizado de recuperação.
 - **Observabilidade** (logs estruturados, Sentry) e backups do banco.
 
 ## 11. Próxima fase recomendada
@@ -191,4 +199,4 @@ leads e tarefas. A navegação e as ações de escrita são filtradas por perfil
 2. Importação de leads (CSV) e webhooks de formulários do site.
 3. Notificações de tarefas/prazos vencendo (e-mail/WhatsApp).
 4. Relatórios exportáveis (PDF/Excel) do DRE e do fluxo de caixa.
-5. Auditoria efetiva e histórico de alterações por entidade.
+5. Tela consolidada de auditoria e expansão da cobertura por entidade.

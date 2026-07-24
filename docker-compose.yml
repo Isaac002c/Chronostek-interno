@@ -28,6 +28,7 @@ services:
       AUTH_SECRET: ${AUTH_SECRET}
       AUTH_URL: ${AUTH_URL}
       AUTH_TRUST_HOST: "true"
+      AUTH_TRUST_PROXY: ${AUTH_TRUST_PROXY:-false}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD deve ser definida}
       SEED_EMAIL_DOMAIN: ${SEED_EMAIL_DOMAIN:-telun.com.br}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
