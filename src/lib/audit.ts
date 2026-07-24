@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * Registra uma entrada de auditoria. A auditoria NUNCA deve derrubar a operação
- * principal — falhas aqui são silenciadas. Guarda before/after/reason/origin em
- * `metadata` (Json). Usado especialmente nas movimentações financeiras.
+ * principal; falhas emitem um sinal operacional sem expor os metadados. Guarda
+ * before/after/reason/origin em `metadata` (Json).
  */
 export async function writeAudit(params: {
   userId?: string | null;

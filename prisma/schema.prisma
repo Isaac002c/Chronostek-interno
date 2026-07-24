@@ -1376,6 +1376,9 @@ model AuditLog {
   user User? @relation(fields: [userId], references: [id])
 
   @@index([entity, entityId])
+  @@index([entity, createdAt])
+  @@index([action, createdAt])
+  @@index([userId, createdAt])
   @@index([createdAt])
 }
 

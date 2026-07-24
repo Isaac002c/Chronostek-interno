@@ -99,17 +99,33 @@ operacionais descritos em "Riscos residuais".
   autenticação/Prisma da árvore dos formulários cliente e reduziu várias cargas
   iniciais de aproximadamente 384 kB para cerca de 130 kB.
 
+### Visibilidade operacional de auditoria
+
+- A área administrativa agora possui uma tela consolidada de auditoria, restrita
+  a `SUPER_ADMIN`/`SOCIO_ADMIN`.
+- Os filtros por entidade, ação, responsável, ID e período são aplicados no
+  servidor; o histórico é ordenado e paginado em blocos de 50 registros.
+- Metadados legados passam por redação recursiva de senhas, hashes, tokens,
+  cookies, segredos e credenciais antes da renderização. Profundidade, strings,
+  listas e objetos também têm limites explícitos.
+- Índices compostos por entidade/ação/responsável e data sustentam os filtros
+  cronológicos sem depender de varreduras completas conforme o histórico cresce.
+- O smoke autenticado confirmou a exibição de login bem-sucedido e bloqueado,
+  o filtro por ação/período e o redirecionamento de BDR para fora da tela.
+- O teste integrado compartilha a instância Prisma usada pelos módulos da
+  aplicação, evitando conexões duplicadas no harness descartável.
+
 ## Evidências de validação
 
 | Verificação | Resultado |
 | --- | --- |
 | `npx prisma validate` | aprovado |
-| Migrations em PostgreSQL descartável | 3/3 aplicadas em banco vazio |
+| Migrations em PostgreSQL descartável | 4/4 aplicadas em banco vazio |
 | Seed inicial | aprovado |
 | Reexecução segura do seed | usuário desativado não foi reativado/promovido; dados demo não duplicaram |
 | `npm run test:integration` | CRUD, relações, transação e rollback aprovados |
 | `npm test` | 48/48 |
-| `npm run test:auth` | 8/8 |
+| `npm run test:auth` | 14/14 |
 | `npm run test:finance` | 10/10 |
 | `npx tsc --noEmit` | aprovado |
 | `npm run lint` | zero erros e zero avisos |
@@ -122,6 +138,8 @@ operacionais descritos em "Riscos residuais".
 | Rate limiting integrado | 4 falhas + senha correta autenticam e limpam; 5 falhas bloqueiam a senha correta |
 | Concorrência de SUPER_ADMIN | 2 rebaixamentos simultâneos: 1 concluiu e 1 foi bloqueado |
 | Auditoria de autenticação | eventos de sucesso e bloqueio persistidos, sem e-mail/IP nas chaves |
+| Tela administrativa de auditoria | eventos e filtros responderam 200; BDR redirecionado para `/dashboard` |
+| Redação de metadados | segredos recursivos e conteúdos excessivos cobertos por testes |
 | `git diff --check` | aprovado |
 
 O navegador embutido não conseguiu anexar uma webview nesta sessão. Para não
@@ -133,8 +151,10 @@ renderização autenticada e verificações de autorização.
 
 - `20260723180000_auth_throttle`: adiciona `LoginThrottle`, com chave HMAC,
   contador, janela, bloqueio e índice para limpeza por `updatedAt`.
+- `20260723190000_audit_query_indexes`: adiciona índices compostos para entidade,
+  ação e responsável com ordenação cronológica.
 
-As três migrations foram aplicadas, na ordem, a um PostgreSQL descartável
+As quatro migrations foram aplicadas, na ordem, a um PostgreSQL descartável
 iniciado do zero.
 
 ## Riscos residuais e pré-requisitos de produção
@@ -149,8 +169,9 @@ iniciado do zero.
   cobertura E2E contínua continuam como evolução de produção.
 - Valores monetários ainda usam `Float`; contabilidade fiscal deve migrar para
   `Decimal` ou inteiro em centavos mediante migration planejada.
-- A cobertura de `AuditLog` foi ampliada para autenticação e ciclo de usuários,
-  mas ainda não engloba todas as entidades e mutações.
+- A cobertura de `AuditLog` foi ampliada para autenticação e ciclo de usuários
+  e já possui visão administrativa, mas ainda não engloba todas as entidades e
+  mutações nem possui política formal de retenção/exportação.
 
 ## Próximos passos recomendados
 

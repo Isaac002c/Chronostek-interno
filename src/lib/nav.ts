@@ -173,6 +173,7 @@ export const MODULE_TABS: Record<string, NavTab[]> = {
     { label: "Centros de Custo", href: "/dashboard/configuracoes/centros-custo", module: "CONFIGURACOES" },
     { label: "Indicadores de Meta", href: "/dashboard/configuracoes/indicadores", module: "CONFIGURACOES" },
     { label: "Aprovações", href: "/dashboard/configuracoes/aprovacoes", module: "CONFIGURACOES" },
+    { label: "Auditoria", href: "/dashboard/configuracoes/auditoria", module: "CONFIGURACOES" },
   ],
 };
 

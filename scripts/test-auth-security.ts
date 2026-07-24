@@ -1,4 +1,10 @@
 import { buildLoginThrottleBuckets } from "../src/lib/auth-throttle";
+import {
+  formatAuditMetadata,
+  formatAuditTimestamp,
+  parseAuditDate,
+  sanitizeAuditMetadata,
+} from "../src/lib/audit-view";
 
 let passed = 0;
 let failed = 0;
@@ -107,6 +113,62 @@ test(
   trustedA.every(
     (bucket, index) => bucket.key !== otherSecret[index].key,
   ),
+);
+
+console.log("\nVisualização segura de auditoria:");
+
+const sanitized = sanitizeAuditMetadata({
+  email: "admin@example.com",
+  passwordHash: "$2a$12$should-never-appear",
+  nested: {
+    accessToken: "secret-token",
+    status: "ATIVO",
+  },
+});
+const sanitizedText = JSON.stringify(sanitized);
+test(
+  "segredos são redigidos recursivamente",
+  sanitizedText.includes("[redigido]") &&
+    !sanitizedText.includes("should-never-appear") &&
+    !sanitizedText.includes("secret-token"),
+);
+test(
+  "campos operacionais permanecem disponíveis",
+  sanitizedText.includes("admin@example.com") &&
+    sanitizedText.includes("ATIVO"),
+);
+
+const oversized = formatAuditMetadata({
+  description: "x".repeat(500),
+  values: Array.from({ length: 30 }, (_, index) => index),
+});
+test(
+  "conteúdo excessivo é truncado de forma explícita",
+  Boolean(
+    oversized?.includes("…") &&
+      oversized.includes("10 item(ns) omitido(s)"),
+  ),
+);
+
+const start = parseAuditDate("2026-07-23", "start");
+const end = parseAuditDate("2026-07-23", "end");
+test(
+  "datas usam os limites do dia em São Paulo",
+  start?.toISOString() === "2026-07-23T03:00:00.000Z" &&
+    end?.toISOString() === "2026-07-24T02:59:59.999Z",
+);
+const formattedTimestamp = formatAuditTimestamp(
+  new Date("2026-07-24T02:30:00.000Z"),
+);
+test(
+  "horários são exibidos no fuso de São Paulo",
+  formattedTimestamp.includes("23/07/2026") &&
+    formattedTimestamp.includes("23:30"),
+);
+test(
+  "datas inválidas não chegam ao filtro do banco",
+  parseAuditDate("2026-02-30", "start") === null &&
+    parseAuditDate("not-a-date", "end") === null,
 );
 
 console.log(`\nResultado: ${passed} passaram, ${failed} falharam.`);

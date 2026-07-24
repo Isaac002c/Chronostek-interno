@@ -158,7 +158,8 @@ src/
 | Jurídico | ✅ | Contratos jurídicos, NDAs, prazos com alerta de atraso |
 | Metas | ✅ | Progresso por período/centro de custo |
 | Tarefas | ✅ | Polimórficas, filtros, conclusão rápida, atrasadas no dashboard |
-| Config/Usuários | ✅ | RBAC, criação de usuários, perfis, auditoria e proteção do último SUPER_ADMIN |
+| Config/Usuários | ✅ | RBAC, criação de usuários, perfis, auditoria atômica e proteção do último SUPER_ADMIN |
+| Config/Auditoria | ✅ | Histórico administrativo, filtros, paginação e redação de metadados sensíveis |
 | **Centros de Custo** | ✅ | CRUD (tipo, responsável, hierarquia, orçamento padrão) + dashboard por CC com abas (visão geral, orçamento, financeiro, metas, tarefas) |
 | **Orçamentos** | ✅ | Budget mensal/trimestral/anual por CC, fluxo rascunho→aprovado→ativo→encerrado |
 | **Real × Orçado** | ✅ | Variação R$/% por CC e categoria, gráfico, alertas de estouro/queda |
@@ -181,10 +182,11 @@ leads e tarefas. A navegação e as ações de escrita são filtradas por perfil
 - **Decimal para dinheiro**: hoje os valores monetários são `Float` (escolha de
   MVP pela serialização limpa nos gráficos). Para contabilidade fiscal, migrar
   para `Decimal`/inteiro em centavos.
-- **Paginação** nas listagens (hoje `take: 100/200`).
+- **Paginação** nas demais listagens (a auditoria já pagina no servidor; várias
+  telas de domínio ainda usam `take: 100/200`).
 - **Auditoria ampliada**: login, metas, financeiro, empresa e ciclo de usuários
-  já são registrados; ainda falta cobrir todas as entidades e oferecer uma tela
-  administrativa consolidada.
+  já são registrados e possuem uma tela administrativa consolidada; ainda falta
+  cobrir todas as entidades e definir retenção/exportação do histórico.
 - **Fase CC — pendências**: UI de **aprovações** (`ApprovalRequest` já no schema), tornar `costCenterId` obrigatório (hoje opcional + herança), categorias financeiras vinculadas a CC na UI, e bloco "Real × Orçado consolidado" no dashboard geral (já existe na página dedicada e por CC).
 - **Permissões por linha** mais finas além do BDR.
 - **Cobertura E2E e CI**: existem testes puros e um smoke integrado transacional,
@@ -199,4 +201,4 @@ leads e tarefas. A navegação e as ações de escrita são filtradas por perfil
 2. Importação de leads (CSV) e webhooks de formulários do site.
 3. Notificações de tarefas/prazos vencendo (e-mail/WhatsApp).
 4. Relatórios exportáveis (PDF/Excel) do DRE e do fluxo de caixa.
-5. Tela consolidada de auditoria e expansão da cobertura por entidade.
+5. Expandir a cobertura da auditoria e definir retenção/exportação do histórico.

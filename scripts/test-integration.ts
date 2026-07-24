@@ -5,7 +5,6 @@
  * registros são criados dentro de uma transação deliberadamente revertida.
  */
 import { randomUUID } from "node:crypto";
-import { PrismaClient } from "@prisma/client";
 import {
   buildLoginThrottleBuckets,
   clearLoginFailures,
@@ -17,6 +16,7 @@ import {
   assertActiveSuperAdminInvariant,
   LastActiveSuperAdminError,
 } from "../src/lib/user-security";
+import { prisma } from "../src/lib/prisma";
 
 if (process.env.ALLOW_INTEGRATION_TESTS !== "true") {
   console.error(
@@ -25,7 +25,6 @@ if (process.env.ALLOW_INTEGRATION_TESTS !== "true") {
   process.exit(2);
 }
 
-const prisma = new PrismaClient();
 const rollback = new Error("ROLLBACK_INTEGRATION_TEST");
 const token = randomUUID();
 const email = `integration-${token}@test.invalid`;
