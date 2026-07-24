@@ -1,6 +1,42 @@
 import type { NextAuthConfig } from "next-auth";
 import type { Role } from "@prisma/client";
 
+const cookieDomain = process.env.AUTH_COOKIE_DOMAIN?.trim();
+const sharedCookies = cookieDomain
+  ? {
+      sessionToken: {
+        name: "__Secure-authjs.session-token",
+        options: {
+          httpOnly: true,
+          sameSite: "lax" as const,
+          path: "/",
+          secure: true,
+          domain: cookieDomain,
+        },
+      },
+      callbackUrl: {
+        name: "__Secure-authjs.callback-url",
+        options: {
+          httpOnly: true,
+          sameSite: "lax" as const,
+          path: "/",
+          secure: true,
+          domain: cookieDomain,
+        },
+      },
+      csrfToken: {
+        name: "__Secure-authjs.csrf-token",
+        options: {
+          httpOnly: true,
+          sameSite: "lax" as const,
+          path: "/",
+          secure: true,
+          domain: cookieDomain,
+        },
+      },
+    }
+  : undefined;
+
 // Configuração "edge-safe": sem Prisma e sem bcrypt, para poder rodar no
 // middleware (edge runtime). O provider Credentials é adicionado em auth.ts.
 export const authConfig = {
@@ -12,6 +48,7 @@ export const authConfig = {
     strategy: "jwt",
     maxAge: 8 * 60 * 60,
   },
+  cookies: sharedCookies,
   logger: {
     error(error) {
       // Credenciais inválidas são um resultado esperado, já protegido pelo

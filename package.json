@@ -19,6 +19,9 @@
     "test:auth": "tsx scripts/test-auth-security.ts",
     "test:finance": "tsx scripts/test-finance.ts",
     "test:finance:db": "tsx scripts/test-finance-db.ts",
+    "test:calendar": "tsx scripts/test-calendar.ts",
+    "test:calendar:db": "tsx scripts/test-calendar-db.ts",
+    "calendar:worker": "tsx scripts/calendar-sync-worker.ts",
     "test:integration": "tsx scripts/test-integration.ts",
     "test:deploy": "tsx scripts/test-deployment-contract.ts",
     "postinstall": "prisma generate"

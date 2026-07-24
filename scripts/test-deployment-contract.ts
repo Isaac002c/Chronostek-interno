@@ -47,6 +47,28 @@ assert.deepEqual(config.rewrites, [
   },
 ]);
 
+const apiClient = readFileSync(
+  join(root, "src", "lib", "api-client.ts"),
+  "utf8",
+);
+assert(
+  apiClient.includes("NEXT_PUBLIC_API_BASE_URL"),
+  "O frontend migrado deve aceitar a origem HTTPS da API.",
+);
+assert(
+  apiClient.includes('credentials: "include"'),
+  "Chamadas frontend/API devem enviar o cookie HttpOnly compartilhado.",
+);
+
+const authConfig = readFileSync(
+  join(root, "src", "auth.config.ts"),
+  "utf8",
+);
+assert(
+  authConfig.includes("AUTH_COOKIE_DOMAIN"),
+  "A sessão deve suportar cookie seguro entre os subdomínios.",
+);
+
 const apiHeaders = config.headers?.find(
   (entry) => entry.source === "/api/:path*",
 )?.headers;
@@ -121,6 +143,19 @@ assert(
   "CORS com credenciais nunca pode usar wildcard.",
 );
 
+const officialApiNginx = readFileSync(
+  join(root, "deploy", "nginx", "api.conf"),
+  "utf8",
+);
+assert(
+  officialApiNginx.includes("server_name api.chronostek.com.br;"),
+  "O vhost da API oficial deve estar preparado.",
+);
+assert(
+  officialApiNginx.includes('if ($request_uri !~ "^/(api/|api$)")'),
+  "O domínio da API oficial não deve publicar páginas visuais.",
+);
+
 const productionComposeOverride = readFileSync(
   join(root, "deploy", "compose", "docker-compose.override.yml"),
   "utf8",
@@ -140,5 +175,5 @@ assert(
 );
 
 console.log(
-  "✓ contratos Vercel/VPS validados; Prisma e PostgreSQL permanecem fora da edge pública",
+  "✓ contrato transitório e fronteira frontend/API validados; Prisma e PostgreSQL permanecem fora da edge pública",
 );

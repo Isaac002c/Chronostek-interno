@@ -36,6 +36,7 @@ enum UserStatus {
 
 enum ModuleKey {
   DASHBOARD
+  CALENDARIO
   LEADS
   COMERCIAL
   FINANCEIRO
@@ -569,6 +570,133 @@ enum TaskStatus {
   CANCELADA
 }
 
+enum CalendarEventType {
+  REUNIAO
+  COMPROMISSO
+  EVENTO_IMPORTANTE
+  APRESENTACAO
+  ENTREGA
+  PRAZO
+  TREINAMENTO
+  EVENTO_COMERCIAL
+  EVENTO_FINANCEIRO
+  EVENTO_INTERNO
+  EVENTO
+  LEMBRETE
+  OUTRO
+}
+
+enum EventParticipantStatus {
+  CONVIDADO
+  ACEITO
+  RECUSADO
+  TENTATIVO
+  CANCELADO
+}
+
+enum CalendarEventStatus {
+  AGENDADO
+  CONCLUIDO
+  CANCELADO
+}
+
+enum CalendarPrivacy {
+  INTERNO
+  PARTICIPANTES
+  PRIVADO
+  CONFIDENCIAL
+}
+
+enum CalendarPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum CalendarOrigin {
+  TELUN
+  GOOGLE
+}
+
+enum CalendarParticipantKind {
+  INTERNO
+  EXTERNO
+  CLIENTE
+  FORNECEDOR
+  MANUAL
+}
+
+enum CalendarRecurrenceFrequency {
+  DIARIA
+  DIAS_UTEIS
+  SEMANAL
+  QUINZENAL
+  MENSAL
+  BIMESTRAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+  PERSONALIZADA
+}
+
+enum CalendarRecurrenceEndType {
+  NUNCA
+  EM_DATA
+  APOS_OCORRENCIAS
+}
+
+enum CalendarReminderUnit {
+  MINUTOS
+  HORAS
+  DIAS
+  SEMANAS
+}
+
+enum CalendarIntegrationStatus {
+  CONECTADO
+  DESCONECTADO
+  ERRO
+  REVOGADO
+}
+
+enum CalendarSyncDirection {
+  TELUN_PARA_GOOGLE
+  GOOGLE_PARA_TELUN
+  BIDIRECIONAL
+}
+
+enum CalendarSyncJobType {
+  FULL_SYNC
+  INCREMENTAL_SYNC
+  PUSH_EVENT
+  DELETE_EVENT
+  RENEW_CHANNEL
+}
+
+enum CalendarSyncJobStatus {
+  PENDENTE
+  PROCESSANDO
+  CONCLUIDO
+  ERRO
+  CANCELADO
+}
+
+enum CalendarConflictStatus {
+  PENDENTE
+  RESOLVIDO_TELUN
+  RESOLVIDO_GOOGLE
+  MESCLADO
+  IGNORADO
+}
+
+enum CalendarChannelStatus {
+  ATIVO
+  EXPIRADO
+  SUBSTITUIDO
+  ERRO
+}
+
 // ─────────────────────────────── CORE ───────────────────────────────
 
 model User {
@@ -605,29 +733,38 @@ model User {
   approvalsResponded     ApprovalRequest[] @relation("ApprovalApprover")
   auditLogs              AuditLog[]
 
-  financialCreated         FinancialEntry[]           @relation("FinancialCreatedBy")
-  financialResponsible     FinancialEntry[]           @relation("FinancialResponsible")
-  financialApproved        FinancialEntry[]           @relation("FinancialApprovedBy")
-  recurringCreated         RecurringEntry[]           @relation("RecurringCreatedBy")
-  recurringResponsible     RecurringEntry[]           @relation("RecurringResponsible")
-  recurringUpdated         RecurringEntry[]           @relation("RecurringUpdatedBy")
-  recurringHistory         RecurringEntryHistory[]
-  projectionsCreated       FinancialProjection[]      @relation("ProjectionCreatedBy")
-  projectionsOwned         FinancialProjection[]      @relation("ProjectionResponsible")
-  projectionValues         FinancialProjectionValue[] @relation("ProjectionValueUpdatedBy")
-  projectionHistory        ProjectionValueHistory[]
-  dreModelsCreated         DreModel[]                 @relation("DreModelCreatedBy")
-  dreVersionsPublished     DreModelVersion[]          @relation("DreVersionPublishedBy")
-  bankAccountsOwned        BankAccount[]              @relation("BankAccountResponsible")
-  suppliersOwned           Supplier[]                 @relation("SupplierResponsible")
-  paymentMethodsCreated    PaymentMethodConfig[]      @relation("PaymentMethodCreatedBy")
-  financialProductsCreated FinancialProduct[]         @relation("FinancialProductCreatedBy")
-  contractsFinancialOwned  Contract[]                 @relation("ContractFinancialResponsible")
-  closingsClosed           MonthlyClosing[]           @relation("ClosingClosedBy")
-  closingsReopened         MonthlyClosing[]           @relation("ClosingReopenedBy")
-  attachmentsUploaded      Attachment[]               @relation("AttachmentUploadedBy")
-  reconciliations          Reconciliation[]           @relation("ReconciledBy")
-  orgSettingsUpdated       OrganizationSettings[]     @relation("OrgSettingsUpdatedBy")
+  financialCreated          FinancialEntry[]           @relation("FinancialCreatedBy")
+  financialResponsible      FinancialEntry[]           @relation("FinancialResponsible")
+  financialApproved         FinancialEntry[]           @relation("FinancialApprovedBy")
+  recurringCreated          RecurringEntry[]           @relation("RecurringCreatedBy")
+  recurringResponsible      RecurringEntry[]           @relation("RecurringResponsible")
+  recurringUpdated          RecurringEntry[]           @relation("RecurringUpdatedBy")
+  recurringHistory          RecurringEntryHistory[]
+  projectionsCreated        FinancialProjection[]      @relation("ProjectionCreatedBy")
+  projectionsOwned          FinancialProjection[]      @relation("ProjectionResponsible")
+  projectionValues          FinancialProjectionValue[] @relation("ProjectionValueUpdatedBy")
+  projectionHistory         ProjectionValueHistory[]
+  dreModelsCreated          DreModel[]                 @relation("DreModelCreatedBy")
+  dreVersionsPublished      DreModelVersion[]          @relation("DreVersionPublishedBy")
+  bankAccountsOwned         BankAccount[]              @relation("BankAccountResponsible")
+  suppliersOwned            Supplier[]                 @relation("SupplierResponsible")
+  paymentMethodsCreated     PaymentMethodConfig[]      @relation("PaymentMethodCreatedBy")
+  financialProductsCreated  FinancialProduct[]         @relation("FinancialProductCreatedBy")
+  contractsFinancialOwned   Contract[]                 @relation("ContractFinancialResponsible")
+  closingsClosed            MonthlyClosing[]           @relation("ClosingClosedBy")
+  closingsReopened          MonthlyClosing[]           @relation("ClosingReopenedBy")
+  attachmentsUploaded       Attachment[]               @relation("AttachmentUploadedBy")
+  reconciliations           Reconciliation[]           @relation("ReconciledBy")
+  orgSettingsUpdated        OrganizationSettings[]     @relation("OrgSettingsUpdatedBy")
+  calendarEventsCreated     CalendarEvent[]            @relation("CalendarEventCreatedBy")
+  calendarEventsResponsible CalendarEvent[]            @relation("CalendarEventResponsible")
+  calendarEventsUpdated     CalendarEvent[]            @relation("CalendarEventUpdatedBy")
+  calendarParticipants      CalendarEventParticipant[]
+  calendarIntegration       CalendarIntegration?
+  googleOAuthStates         GoogleOAuthState[]
+  calendarConflictsResolved CalendarSyncConflict[]     @relation("CalendarConflictResolvedBy")
+  calendarHistory           CalendarEventHistory[]
+  calendarEventTypesCreated CalendarEventTypeConfig[]
 
   @@index([role])
   @@index([status])
@@ -672,6 +809,7 @@ model CostCenter {
   projectionLines     FinancialProjectionLine[]
   dreMappings         DreRowMapping[]
   suppliersDefault    Supplier[]                @relation("SupplierDefaultCostCenter")
+  calendarEvents      CalendarEvent[]
 
   @@index([active])
   @@index([type])
@@ -849,18 +987,20 @@ model Client {
   updatedAt             DateTime     @updatedAt
   deletedAt             DateTime?
 
-  internalResponsible User?                     @relation("ClientResponsible", fields: [internalResponsibleId], references: [id])
-  contracts           Contract[]
-  proposals           Proposal[]
-  projects            Project[]
-  financialEntries    FinancialEntry[]
-  convertedLeads      Lead[]                    @relation("LeadConverted")
-  legalContracts      LegalContract[]
-  legalDocuments      LegalDocument[]
-  legalDemands        LegalDemand[]
-  recurringEntries    RecurringEntry[]
-  projectionLines     FinancialProjectionLine[]
-  tasks               Task[]                    @relation("ClientTasks")
+  internalResponsible  User?                      @relation("ClientResponsible", fields: [internalResponsibleId], references: [id])
+  contracts            Contract[]
+  proposals            Proposal[]
+  projects             Project[]
+  financialEntries     FinancialEntry[]
+  convertedLeads       Lead[]                     @relation("LeadConverted")
+  legalContracts       LegalContract[]
+  legalDocuments       LegalDocument[]
+  legalDemands         LegalDemand[]
+  recurringEntries     RecurringEntry[]
+  projectionLines      FinancialProjectionLine[]
+  tasks                Task[]                     @relation("ClientTasks")
+  calendarEvents       CalendarEvent[]
+  calendarParticipants CalendarEventParticipant[]
 
   @@index([status])
   @@index([internalResponsibleId])
@@ -1037,6 +1177,7 @@ model Project {
   recurringEntries RecurringEntry[]
   projectionLines  FinancialProjectionLine[]
   tasks            Task[]                    @relation("ProjectTasks")
+  calendarEvents   CalendarEvent[]
 
   @@index([status])
   @@index([type])
@@ -1282,6 +1423,7 @@ model Goal {
   assignees      GoalAssignee[]
   contributions  GoalContribution[] @relation("GoalContributions")
   tasks          Task[]             @relation("GoalTasks")
+  calendarEvents CalendarEvent[]
 
   @@index([type])
   @@index([year, month])
@@ -1385,11 +1527,12 @@ model PlanningPeriod {
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
 
-  parent    PlanningPeriod?  @relation("PlanningPeriodHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children  PlanningPeriod[] @relation("PlanningPeriodHierarchy")
-  createdBy User?            @relation("PlanningPeriodCreatedBy", fields: [createdById], references: [id])
-  goals     Goal[]
-  tasks     Task[]
+  parent         PlanningPeriod?  @relation("PlanningPeriodHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children       PlanningPeriod[] @relation("PlanningPeriodHierarchy")
+  createdBy      User?            @relation("PlanningPeriodCreatedBy", fields: [createdById], references: [id])
+  goals          Goal[]
+  tasks          Task[]
+  calendarEvents CalendarEvent[]
 
   @@index([type])
   @@index([year])
@@ -1411,6 +1554,327 @@ model Holiday {
 }
 
 // ─────────────────────────────── TAREFAS ───────────────────────────────
+
+/**
+ * Evento canônico do Telun. Integrações externas são ligadas por
+ * CalendarExternalMapping, evitando usar o id do Google como chave interna.
+ */
+model CalendarEvent {
+  id                    String              @id @default(cuid())
+  tenantId              String              @default("default")
+  title                 String
+  description           String?
+  type                  CalendarEventType   @default(REUNIAO)
+  status                CalendarEventStatus @default(AGENDADO)
+  priority              CalendarPriority    @default(MEDIA)
+  privacy               CalendarPrivacy     @default(INTERNO)
+  origin                CalendarOrigin      @default(TELUN)
+  startAt               DateTime
+  endAt                 DateTime
+  allDay                Boolean             @default(false)
+  timezone              String              @default("America/Sao_Paulo")
+  location              String?
+  meetingUrl            String?
+  category              String?
+  color                 String?
+  department            String?
+  notes                 String?
+  costCenterId          String?
+  goalId                String?
+  planningPeriodId      String?
+  clientId              String?
+  supplierId            String?
+  projectId             String?
+  responsibleId         String?
+  createdById           String?
+  updatedById           String?
+  recurrenceId          String?
+  recurrenceInstanceKey String?
+  originalStartAt       DateTime?
+  parentEventId         String?
+  syncPending           Boolean             @default(false)
+  sourceVersion         Int                 @default(1)
+  cancelledAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  deletedAt             DateTime?
+
+  costCenter       CostCenter?                @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  goal             Goal?                      @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  planningPeriod   PlanningPeriod?            @relation(fields: [planningPeriodId], references: [id], onDelete: SetNull)
+  client           Client?                    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  supplier         Supplier?                  @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  project          Project?                   @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  responsible      User?                      @relation("CalendarEventResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  createdBy        User?                      @relation("CalendarEventCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy        User?                      @relation("CalendarEventUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  recurrence       CalendarRecurrence?        @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
+  parentEvent      CalendarEvent?             @relation("CalendarEventExceptions", fields: [parentEventId], references: [id])
+  exceptions       CalendarEvent[]            @relation("CalendarEventExceptions")
+  participants     CalendarEventParticipant[]
+  reminders        CalendarEventReminder[]
+  externalMappings CalendarExternalMapping[]
+  conflicts        CalendarSyncConflict[]
+  history          CalendarEventHistory[]
+
+  @@unique([tenantId, recurrenceInstanceKey])
+  @@index([tenantId, startAt, endAt])
+  @@index([type])
+  @@index([status])
+  @@index([privacy])
+  @@index([costCenterId])
+  @@index([goalId])
+  @@index([planningPeriodId])
+  @@index([clientId])
+  @@index([supplierId])
+  @@index([projectId])
+  @@index([responsibleId])
+  @@index([recurrenceId])
+  @@index([parentEventId])
+  @@index([deletedAt])
+}
+
+model CalendarEventParticipant {
+  id         String                  @id @default(cuid())
+  eventId    String
+  userId     String?
+  clientId   String?
+  supplierId String?
+  name       String?
+  email      String?
+  kind       CalendarParticipantKind @default(INTERNO)
+  role       String                  @default("PARTICIPANTE")
+  status     EventParticipantStatus  @default(CONVIDADO)
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+
+  event    CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  client   Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  supplier Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, userId])
+  @@unique([eventId, email])
+  @@index([eventId])
+  @@index([userId])
+  @@index([clientId])
+  @@index([supplierId])
+  @@index([email])
+}
+
+model CalendarEventReminder {
+  id            String               @id @default(cuid())
+  eventId       String
+  amount        Int
+  unit          CalendarReminderUnit @default(MINUTOS)
+  minutesBefore Int
+  createdAt     DateTime             @default(now())
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, minutesBefore])
+  @@index([eventId])
+}
+
+model CalendarRecurrence {
+  id        String                      @id @default(cuid())
+  tenantId  String                      @default("default")
+  frequency CalendarRecurrenceFrequency
+  interval  Int                         @default(1)
+  rrule     String
+  timezone  String                      @default("America/Sao_Paulo")
+  weekDays  Int[]                       @default([])
+  monthDay  Int?
+  endType   CalendarRecurrenceEndType   @default(NUNCA)
+  until     DateTime?
+  count     Int?
+  active    Boolean                     @default(true)
+  createdAt DateTime                    @default(now())
+  updatedAt DateTime                    @updatedAt
+
+  events CalendarEvent[]
+
+  @@index([tenantId, active])
+}
+
+/**
+ * Uma integração Google por usuário. Tokens e syncToken usam envelope
+ * autenticado AES-256-GCM; nenhum segredo é armazenado em texto puro.
+ */
+model CalendarIntegration {
+  id                    String                    @id @default(cuid())
+  tenantId              String                    @default("default")
+  userId                String                    @unique
+  provider              String                    @default("GOOGLE")
+  googleAccountId       String?
+  googleEmail           String?
+  accessTokenEncrypted  String?
+  refreshTokenEncrypted String?
+  accessTokenExpiresAt  DateTime?
+  grantedScopes         String[]                  @default([])
+  selectedCalendarId    String?
+  selectedCalendarName  String?
+  direction             CalendarSyncDirection     @default(BIDIRECIONAL)
+  status                CalendarIntegrationStatus @default(DESCONECTADO)
+  syncTokenEncrypted    String?
+  lastSyncAt            DateTime?
+  lastSuccessfulSyncAt  DateTime?
+  lastErrorCode         String?
+  lastErrorMessage      String?
+  consecutiveFailures   Int                       @default(0)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  disconnectedAt        DateTime?
+
+  mappings  CalendarExternalMapping[]
+  conflicts CalendarSyncConflict[]
+  channels  CalendarNotificationChannel[]
+  jobs      CalendarSyncJob[]
+  user      User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([googleEmail])
+}
+
+model GoogleOAuthState {
+  id                    String    @id @default(cuid())
+  stateHash             String    @unique
+  userId                String
+  redirectPath          String    @default("/dashboard/calendario")
+  codeVerifierEncrypted String?
+  expiresAt             DateTime
+  usedAt                DateTime?
+  createdAt             DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model CalendarExternalMapping {
+  id                 String    @id @default(cuid())
+  integrationId      String
+  eventId            String
+  externalCalendarId String
+  externalEventId    String
+  etag               String?
+  iCalUid            String?
+  htmlLink           String?
+  googleUpdatedAt    DateTime?
+  lastSyncedAt       DateTime?
+  lastTelunVersion   Int       @default(0)
+  deletedExternally  Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  integration CalendarIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  event       CalendarEvent       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalCalendarId, externalEventId])
+  @@unique([integrationId, eventId])
+  @@index([eventId])
+  @@index([iCalUid])
+}
+
+model CalendarSyncConflict {
+  id              String                 @id @default(cuid())
+  integrationId   String
+  eventId         String
+  externalEventId String?
+  telunSnapshot   Json
+  googleSnapshot  Json
+  status          CalendarConflictStatus @default(PENDENTE)
+  resolution      Json?
+  resolvedById    String?
+  resolvedAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  integration CalendarIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  event       CalendarEvent       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  resolvedBy  User?               @relation("CalendarConflictResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([integrationId, status])
+  @@index([eventId])
+}
+
+model CalendarNotificationChannel {
+  id               String                @id @default(cuid())
+  integrationId    String
+  channelId        String                @unique
+  channelTokenHash String
+  resourceId       String
+  resourceUri      String?
+  expiration       DateTime
+  status           CalendarChannelStatus @default(ATIVO)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  integration CalendarIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId, status, expiration])
+  @@index([resourceId])
+}
+
+model CalendarSyncJob {
+  id               String                @id @default(cuid())
+  integrationId    String?
+  type             CalendarSyncJobType
+  status           CalendarSyncJobStatus @default(PENDENTE)
+  idempotencyKey   String                @unique
+  payload          Json?
+  attempts         Int                   @default(0)
+  maxAttempts      Int                   @default(8)
+  runAt            DateTime              @default(now())
+  lockedAt         DateTime?
+  lockedBy         String?
+  completedAt      DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  integration CalendarIntegration? @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAt])
+  @@index([integrationId, status])
+}
+
+model CalendarEventHistory {
+  id        String         @id @default(cuid())
+  eventId   String
+  userId    String?
+  action    String
+  origin    CalendarOrigin @default(TELUN)
+  before    Json?
+  after     Json?
+  createdAt DateTime       @default(now())
+
+  event CalendarEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model CalendarEventTypeConfig {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("default")
+  key         String
+  label       String
+  color       String
+  icon        String?
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, active, sortOrder])
+}
 
 model Task {
   id             String     @id @default(cuid())
@@ -1535,12 +1999,14 @@ model Supplier {
   updatedAt             DateTime  @updatedAt
   deletedAt             DateTime?
 
-  financialEntries  FinancialEntry[]
-  recurringEntries  RecurringEntry[]
-  projectionLines   FinancialProjectionLine[]
-  defaultCategory   FinancialCategory?        @relation("SupplierDefaultCategory", fields: [defaultCategoryId], references: [id])
-  defaultCostCenter CostCenter?               @relation("SupplierDefaultCostCenter", fields: [defaultCostCenterId], references: [id])
-  responsible       User?                     @relation("SupplierResponsible", fields: [responsibleId], references: [id])
+  financialEntries     FinancialEntry[]
+  recurringEntries     RecurringEntry[]
+  projectionLines      FinancialProjectionLine[]
+  defaultCategory      FinancialCategory?         @relation("SupplierDefaultCategory", fields: [defaultCategoryId], references: [id])
+  defaultCostCenter    CostCenter?                @relation("SupplierDefaultCostCenter", fields: [defaultCostCenterId], references: [id])
+  responsible          User?                      @relation("SupplierResponsible", fields: [responsibleId], references: [id])
+  calendarEvents       CalendarEvent[]
+  calendarParticipants CalendarEventParticipant[]
 
   @@index([active])
   @@index([tenantId, active])

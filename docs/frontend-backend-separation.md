@@ -1,143 +1,117 @@
-# Separação Vercel → VPS da Telun
+# Separação Vercel → API VPS da Telun
 
 Atualizado em: 2026-07-24
 
-## Decisão
+## Estado real
 
-Foi escolhida a alternativa controlada de proxy/BFF:
+A produção ainda usa, de forma transitória, o rewrite global da Vercel para
+`api-interno.chronostek.com.br`. Nesse modo a Vercel não executa Prisma nem
+recebe segredos, mas a renderização Next.js ainda acontece na VPS. Esse estado
+é seguro para os dados, porém **não é a separação visual final**.
+
+O destino aprovado é:
 
 ```text
 Navegador
-  → https://chronoshub.chronostek.com.br
-  → rewrite externo na Vercel
-  → https://api-interno.chronostek.com.br
-  → Nginx
-  → telun-web:3000
-  → chronostek-db:5432 (rede Docker privada)
+  ├─ interface → https://chronoshub.chronostek.com.br (Vercel)
+  └─ HTTPS/JSON → https://api.chronostek.com.br (VPS)
+                    ├─ Auth.js / RBAC / auditoria
+                    ├─ APIs de negócio e jobs
+                    └─ PostgreSQL privado na rede Docker
 ```
 
-O endereço visível e a origem do navegador continuam sendo `chronoshub`. A
-Vercel atua como edge/proxy e não executa o monólito. O processo Next.js
-full-stack executa exclusivamente na VPS.
+Critérios obrigatórios para remover o modo transitório:
 
-## Motivo
+1. `api.chronostek.com.br` deve existir no DNS, resolver para a VPS e possuir
+   certificado válido;
+2. todos os módulos visuais devem deixar de depender de Server Components,
+   Server Actions e imports Prisma no runtime Vercel;
+3. login, renovação de sessão e logout cross-origin devem passar usando cookie
+   `Secure`, `HttpOnly`, `SameSite=Lax` e `Domain=.chronostek.com.br`;
+4. toda autorização deve continuar sendo aplicada na API, nunca somente no
+   frontend;
+5. smoke autenticado deve cobrir cada módulo antes da promoção do alias.
 
-O sistema atual não possui uma divisão frontend/backend:
+## Fronteira implementada nesta revisão
 
-- 99 arquivos executam consultas Prisma;
-- 24 módulos expõem Server Actions;
-- Server Components consultam o banco durante a renderização;
-- Auth.js valida credenciais, rate limit e status do usuário no PostgreSQL;
-- sessão, RBAC, ownership, auditoria e transações são compartilhados pelo
-  monólito.
+O calendário novo já usa a fronteira HTTP no navegador:
 
-Transformar todos esses fluxos em endpoints HTTP e reimplementar a camada
-cliente seria uma reescrita extensa e de maior risco para o deploy atual. O
-proxy externo é suportado nativamente pela Vercel e preserva as fronteiras de
-segurança já testadas.
+- `CalendarClient` renderiza e mantém o estado visual;
+- `apiRequest` usa `NEXT_PUBLIC_API_BASE_URL` e
+  `credentials: "include"`;
+- `/api/calendar/*` implementa consulta unificada, CRUD, recorrência,
+  participantes, lembretes, tipos, histórico e conflitos;
+- `/api/integrations/google/calendar/*` implementa OAuth, seleção de
+  calendário, sincronização, webhook e desconexão;
+- tokens e sync tokens permanecem somente no backend;
+- o worker executa somente na VPS.
 
-## Contrato da Vercel
+Os demais módulos ainda contêm Server Components/Server Actions com Prisma.
+Portanto, trocar agora o rewrite global por um frontend estático reduziria
+funcionalidades e não é permitido.
 
-O deployment da Vercel contém somente:
+## Sessão no destino final
 
-- `vercel.json`;
-- `vercel-proxy/index.html`.
+Backend:
 
-Configurações obrigatórias:
+```text
+AUTH_URL=https://api.chronostek.com.br
+AUTH_COOKIE_DOMAIN=.chronostek.com.br
+PUBLIC_FRONTEND_URL=https://chronoshub.chronostek.com.br
+```
 
-- `framework: null`;
-- instalação de dependências desativada;
-- nenhum build Next.js;
-- nenhum Vercel Function;
-- rewrite global para `api-interno.chronostek.com.br`;
-- cache desativado explicitamente em `/api/*`.
+Frontend:
 
-Consequentemente, a Vercel não recebe nem utiliza:
+```text
+NEXT_PUBLIC_API_BASE_URL=https://api.chronostek.com.br
+```
 
-- `DATABASE_URL`;
-- senha do PostgreSQL;
-- `AUTH_SECRET`;
-- credenciais da VPS;
-- variáveis de seed.
+O Nginx permite CORS somente para
+`https://chronoshub.chronostek.com.br`, responde preflight sem encaminhar ao
+Next.js e inclui `Access-Control-Allow-Credentials: true`. O domínio oficial da
+API publica apenas `/api/*`; páginas visuais retornam 404.
 
-Não é necessário `NEXT_PUBLIC_API_URL`, pois o navegador usa a mesma origem
-`chronoshub` para páginas, assets, Auth.js e Server Actions.
+## Dados e segredos
 
-## Backend e autenticação
+- PostgreSQL permanece sem porta publicada.
+- `DATABASE_URL`, `AUTH_SECRET`, credenciais Google, chave de criptografia,
+  senha do banco e credenciais da VPS nunca entram na Vercel.
+- O frontend recebe apenas `NEXT_PUBLIC_API_BASE_URL`.
+- Migrations e worker rodam na VPS.
+- Nenhum seed é executado em produção.
 
-O container `telun-web` é a fonte oficial de:
+## Plano de conversão restante
 
-- páginas e componentes renderizados;
-- Auth.js e cookies de sessão;
-- Server Actions;
-- Prisma e PostgreSQL;
-- RBAC e ownership;
-- auditoria e rate limiting;
-- módulos comercial, financeiro, jurídico, metas e tarefas.
+Converter um módulo por vez:
 
-`AUTH_URL` aponta para `https://chronoshub.chronostek.com.br`. Os cookies
-continuam host-only, `Secure`, `HttpOnly` e `SameSite=Lax`: embora a resposta
-seja gerada na VPS, o navegador a recebe da origem `chronoshub`.
+1. expor loaders/mutações como endpoints JSON autenticados;
+2. mover a interface para componentes cliente que usam `apiRequest`;
+3. testar RBAC/ownership no endpoint;
+4. provar ausência de Prisma e Server Actions no pacote Vercel;
+5. repetir para dashboard, comercial, financeiro, projetos/TI, marketing,
+   jurídico, metas, tarefas e configurações;
+6. gerar um deployment preview frontend-only;
+7. executar smoke autenticado completo;
+8. promover o alias somente com paridade.
 
-O Nginx deverá normalizar `Host`, `X-Forwarded-Host` e
-`X-Forwarded-Proto` para a origem pública, permitir somente o Origin
-`https://chronoshub.chronostek.com.br` quando houver CORS e encaminhar a
-identidade de rede de forma compatível com a cadeia Vercel → Cloudflare → VPS.
+## Cutover final
 
-## Dados e persistência
-
-- O banco real permanece `chronostek`.
-- O volume real permanece `chronostek_chronostek_pgdata`.
-- As quatro migrations já aplicadas não serão repetidas.
-- Nenhum seed será executado.
-- Uploads e configurações permanecem preservados nos backups pré-deploy.
-
-## Estado aplicado em produção
-
-Em 2026-07-24:
-
-- a Vercel passou a publicar somente o proxy externo;
-- o domínio `chronoshub.chronostek.com.br` passou a responder pelo backend da
-  VPS, mantendo a origem pública no navegador;
-- o container `telun-web` passou a executar a revisão validada
-  `471c541aaa5ef6dbede1772ad8a799f63a69eea5`;
-- o web legado foi parado e teve o restart automático desativado;
-- o PostgreSQL foi recriado sobre o mesmo volume sem bind de porta no host;
-- as regras públicas de firewall para 5432 e 8080 foram removidas em IPv4 e
-  IPv6;
-- o backup imediatamente anterior ao endurecimento ficou registrado como
-  `20260724-165636Z-private-db`.
-
-Permanecem como validações operacionais externas o smoke autenticado com uma
-conta real e a ativação do proxy Cloudflare antes de restringir 80/443 aos
-endereços da Cloudflare.
-
-## Cutover
-
-1. Validar o artefato proxy localmente.
-2. Endurecer e persistir somente o vhost Telun no Nginx.
-3. Validar o backend por HTTPS e Host público.
-4. Criar deployment preview da Vercel sem variáveis privadas.
-5. Testar login, refresh, logout, Server Actions, RBAC e módulos críticos.
-6. Promover o deployment da Vercel.
-7. Remover da Vercel `DATABASE_URL`, `AUTH_SECRET` e demais variáveis privadas.
-8. Parar o container web antigo.
-9. Recriar somente o container PostgreSQL sem publicação de porta, preservando
-   o mesmo volume.
-10. Remover as liberações públicas de 5432 e 8080.
-11. Ativar o proxy Cloudflare somente após validar o certificado da origem.
-12. Restringir o tráfego da origem à Cloudflare depois da confirmação ponta a
-    ponta.
+1. Criar o registro DNS `api.chronostek.com.br`.
+2. Emitir o certificado e habilitar `deploy/nginx/api.conf`.
+3. Configurar as variáveis privadas somente na VPS.
+4. Validar health, CORS, Auth.js e APIs diretamente no domínio novo.
+5. Implantar o frontend-only em preview na Vercel.
+6. Testar todos os módulos e perfis de acesso.
+7. Promover o frontend e remover o rewrite global.
+8. Remover da Vercel qualquer variável que não seja pública.
+9. Manter o deployment proxy anterior disponível durante a janela de
+   observação.
 
 ## Rollback
 
-- Frontend/proxy: promover novamente o deployment Vercel anterior.
-- Backend: apontar o vhost para a imagem anterior preservada.
-- Nginx: restaurar a cópia pré-cutover do vhost e executar `nginx -t`.
-- Exposição do banco: restaurar o override público preservado e recriar apenas
-  o serviço `db`; o volume não deve ser removido.
-- Banco: não executar rollback automático. As migrations são aditivas; restore
-  só é permitido mediante corrupção confirmada e janela aprovada.
-
-O container web legado e a imagem anterior do backend permanecem preservados e
-parados durante a janela de observação para permitir rollback rápido.
+- Vercel: promover o deployment proxy anterior.
+- Backend: reativar a imagem anterior preservada.
+- Nginx: restaurar o vhost anterior após `nginx -t`.
+- Banco: manter as migrations aditivas; não executar downgrade destrutivo.
+- Restore só deve ocorrer a partir de dump ensaiado, mediante corrupção
+  confirmada e janela aprovada.

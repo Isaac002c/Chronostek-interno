@@ -107,7 +107,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Calendário",
     href: "/dashboard/calendario",
     icon: CalendarDays,
-    modules: ["DASHBOARD"],
+    modules: ["CALENDARIO"],
     match: ["/dashboard/calendario"],
   },
   {
