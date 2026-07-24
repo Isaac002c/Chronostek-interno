@@ -1,0 +1,4 @@
+services:
+  # Intentionally empty: PostgreSQL must only be reachable through the
+  # private Compose network declared by the production base file.
+  db: {}

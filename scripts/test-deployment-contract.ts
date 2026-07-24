@@ -121,4 +121,24 @@ assert(
   "CORS com credenciais nunca pode usar wildcard.",
 );
 
-console.log("✓ contrato do proxy Vercel validado; nenhum runtime Prisma será publicado");
+const productionComposeOverride = readFileSync(
+  join(root, "deploy", "compose", "docker-compose.override.yml"),
+  "utf8",
+);
+assert.match(
+  productionComposeOverride,
+  /^\s*services:\s*[\s\S]*\bdb:\s*\{\}\s*$/m,
+  "O override de produção deve manter o PostgreSQL na rede privada do Compose.",
+);
+assert(
+  !productionComposeOverride.includes("ports:"),
+  "O override de produção não pode publicar portas do PostgreSQL.",
+);
+assert(
+  !productionComposeOverride.includes("5432:5432"),
+  "A porta PostgreSQL não pode ser vinculada ao host.",
+);
+
+console.log(
+  "✓ contratos Vercel/VPS validados; Prisma e PostgreSQL permanecem fora da edge pública",
+);

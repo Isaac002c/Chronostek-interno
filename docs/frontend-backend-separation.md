@@ -92,6 +92,26 @@ identidade de rede de forma compatível com a cadeia Vercel → Cloudflare → V
 - Nenhum seed será executado.
 - Uploads e configurações permanecem preservados nos backups pré-deploy.
 
+## Estado aplicado em produção
+
+Em 2026-07-24:
+
+- a Vercel passou a publicar somente o proxy externo;
+- o domínio `chronoshub.chronostek.com.br` passou a responder pelo backend da
+  VPS, mantendo a origem pública no navegador;
+- o container `telun-web` passou a executar a revisão validada
+  `471c541aaa5ef6dbede1772ad8a799f63a69eea5`;
+- o web legado foi parado e teve o restart automático desativado;
+- o PostgreSQL foi recriado sobre o mesmo volume sem bind de porta no host;
+- as regras públicas de firewall para 5432 e 8080 foram removidas em IPv4 e
+  IPv6;
+- o backup imediatamente anterior ao endurecimento ficou registrado como
+  `20260724-165636Z-private-db`.
+
+Permanecem como validações operacionais externas o smoke autenticado com uma
+conta real e a ativação do proxy Cloudflare antes de restringir 80/443 aos
+endereços da Cloudflare.
+
 ## Cutover
 
 1. Validar o artefato proxy localmente.
@@ -114,8 +134,10 @@ identidade de rede de forma compatível com a cadeia Vercel → Cloudflare → V
 - Frontend/proxy: promover novamente o deployment Vercel anterior.
 - Backend: apontar o vhost para a imagem anterior preservada.
 - Nginx: restaurar a cópia pré-cutover do vhost e executar `nginx -t`.
+- Exposição do banco: restaurar o override público preservado e recriar apenas
+  o serviço `db`; o volume não deve ser removido.
 - Banco: não executar rollback automático. As migrations são aditivas; restore
   só é permitido mediante corrupção confirmada e janela aprovada.
 
-O container e a porta antigos só serão removidos depois do smoke autenticado do
-proxy, para manter rollback rápido durante a troca.
+O container web legado e a imagem anterior do backend permanecem preservados e
+parados durante a janela de observação para permitir rollback rápido.
