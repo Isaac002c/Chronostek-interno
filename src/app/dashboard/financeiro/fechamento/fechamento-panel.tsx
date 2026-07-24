@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 import { Lock, Unlock, CheckCircle2 } from "lucide-react";
-import { initialActionState } from "@/lib/actions";
+import { initialActionState } from "@/lib/action-state";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/form/submit-button";

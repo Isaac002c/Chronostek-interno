@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
-import { initialActionState } from "@/lib/actions";
+import { initialActionState } from "@/lib/action-state";
 import { Field, FormGrid } from "@/components/form/field";
 import { SubmitButton } from "@/components/form/submit-button";
 import { Input } from "@/components/ui/input";

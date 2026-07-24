@@ -4,7 +4,7 @@ import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
-import { initialActionState, type ActionState } from "@/lib/actions";
+import { initialActionState, type ActionState } from "@/lib/action-state";
 import { PROPOSAL_STATUS_OPTIONS, type Option } from "@/lib/enums";
 import { Field, FormGrid } from "@/components/form/field";
 import { SubmitButton } from "@/components/form/submit-button";

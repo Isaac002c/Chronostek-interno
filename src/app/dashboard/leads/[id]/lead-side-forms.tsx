@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { MessageSquarePlus, ListPlus } from "lucide-react";
-import { initialActionState, type ActionState } from "@/lib/actions";
+import { initialActionState, type ActionState } from "@/lib/action-state";
 import {
   LEAD_INTERACTION_TYPE_OPTIONS,
   PRIORITY_OPTIONS,

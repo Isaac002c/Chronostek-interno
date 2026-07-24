@@ -2,13 +2,7 @@ import { z } from "zod";
 import { getCurrentUser, type SessionUser } from "@/lib/session";
 import { canAccessModule, canWrite, type NavModule } from "@/lib/rbac";
 
-export type ActionState = {
-  ok?: boolean;
-  error?: string;
-  fieldErrors?: Record<string, string[]>;
-};
-
-export const initialActionState: ActionState = {};
+export type { ActionState } from "@/lib/action-state";
 
 /** Garante sessão + acesso ao módulo + permissão de escrita. */
 export async function requireWrite(module: NavModule): Promise<

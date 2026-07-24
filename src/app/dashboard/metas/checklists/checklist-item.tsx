@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Check, RotateCcw, ChevronDown, ChevronRight, Paperclip, Save } from "lucide-react";
-import { initialActionState } from "@/lib/actions";
+import { initialActionState } from "@/lib/action-state";
 import { CONTRIBUTION_UNIT_LABELS } from "@/lib/enums";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";

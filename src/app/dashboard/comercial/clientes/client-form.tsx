@@ -4,7 +4,7 @@ import { useActionState, useEffect } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
-import { initialActionState, type ActionState } from "@/lib/actions";
+import { initialActionState, type ActionState } from "@/lib/action-state";
 import {
   CLIENT_STATUS_OPTIONS,
   LEAD_ORIGIN_OPTIONS,

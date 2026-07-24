@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Save } from "lucide-react";
-import { initialActionState, type ActionState } from "@/lib/actions";
+import { initialActionState, type ActionState } from "@/lib/action-state";
 import {
   GOAL_TYPE_OPTIONS,
   GOAL_PERIOD_OPTIONS,

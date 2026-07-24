@@ -80,16 +80,36 @@ operacionais descritos em "Riscos residuais".
 - README atualizado com Node mínimo, migrations, seed seguro e comandos de
   validação.
 
+### Endurecimento adicional de autenticação e contas
+
+- Tentativas de login agora usam rate limiting persistente no PostgreSQL:
+  5 falhas por identidade+origem e 20 por identidade em uma janela de 15
+  minutos, com bloqueio de 15 minutos.
+- E-mail e IP nunca são persistidos no controle de tentativas; as chaves são
+  HMACs derivados de `AUTH_SECRET`.
+- Headers de origem só são aceitos quando `AUTH_TRUST_PROXY=true`.
+- Login bem-sucedido e início de bloqueio são registrados em `AuditLog`; falhas
+  esperadas de credenciais não geram stack traces repetitivos.
+- Criação, atualização e exclusão de usuários geram auditoria atômica sem
+  registrar hashes de senha.
+- A regra do último `SUPER_ADMIN` foi movida para a mesma transação serializável
+  da mutação, com retry de conflitos. Rebaixamentos concorrentes não conseguem
+  deixar a aplicação sem administrador.
+- O contrato `ActionState` foi separado em módulo client-safe. Isso removeu
+  autenticação/Prisma da árvore dos formulários cliente e reduziu várias cargas
+  iniciais de aproximadamente 384 kB para cerca de 130 kB.
+
 ## Evidências de validação
 
 | Verificação | Resultado |
 | --- | --- |
 | `npx prisma validate` | aprovado |
-| Migrations em PostgreSQL descartável | 2/2 aplicadas em banco vazio |
+| Migrations em PostgreSQL descartável | 3/3 aplicadas em banco vazio |
 | Seed inicial | aprovado |
 | Reexecução segura do seed | usuário desativado não foi reativado/promovido; dados demo não duplicaram |
 | `npm run test:integration` | CRUD, relações, transação e rollback aprovados |
 | `npm test` | 48/48 |
+| `npm run test:auth` | 8/8 |
 | `npm run test:finance` | 10/10 |
 | `npx tsc --noEmit` | aprovado |
 | `npm run lint` | zero erros e zero avisos |
@@ -99,6 +119,9 @@ operacionais descritos em "Riscos residuais".
 | Rotas críticas autenticadas | dashboard, leads, financeiro, metas, tarefas e usuários responderam 200 |
 | Ownership BDR | lead alheio e edição de tarefa alheia responderam 404 |
 | Módulo negado ao BDR | Financeiro redirecionou para `/dashboard` |
+| Rate limiting integrado | 4 falhas + senha correta autenticam e limpam; 5 falhas bloqueiam a senha correta |
+| Concorrência de SUPER_ADMIN | 2 rebaixamentos simultâneos: 1 concluiu e 1 foi bloqueado |
+| Auditoria de autenticação | eventos de sucesso e bloqueio persistidos, sem e-mail/IP nas chaves |
 | `git diff --check` | aprovado |
 
 O navegador embutido não conseguiu anexar uma webview nesta sessão. Para não
@@ -108,8 +131,11 @@ renderização autenticada e verificações de autorização.
 
 ## Migrations
 
-Nenhuma migration foi criada ou alterada nesta rodada. As migrations existentes
-foram aplicadas, na ordem, a um PostgreSQL descartável iniciado do zero.
+- `20260723180000_auth_throttle`: adiciona `LoginThrottle`, com chave HMAC,
+  contador, janela, bloqueio e índice para limpeza por `updatedAt`.
+
+As três migrations foram aplicadas, na ordem, a um PostgreSQL descartável
+iniciado do zero.
 
 ## Riscos residuais e pré-requisitos de produção
 
@@ -119,12 +145,12 @@ foram aplicadas, na ordem, a um PostgreSQL descartável iniciado do zero.
   foi modificada silenciosamente; deve ser rotacionada antes do próximo seed.
 - O deploy público exige domínio, HTTPS/reverse proxy confiável, firewall,
   backup testado e monitoramento.
-- Rate limiting/2FA, observabilidade estruturada, paginação ampla e cobertura
-  E2E contínua continuam como evolução de produção.
+- 2FA, recuperação de conta, observabilidade estruturada, paginação ampla e
+  cobertura E2E contínua continuam como evolução de produção.
 - Valores monetários ainda usam `Float`; contabilidade fiscal deve migrar para
   `Decimal` ou inteiro em centavos mediante migration planejada.
-- O modelo `AuditLog` existe, mas a cobertura de auditoria ainda não engloba
-  todas as entidades e mutações.
+- A cobertura de `AuditLog` foi ampliada para autenticação e ciclo de usuários,
+  mas ainda não engloba todas as entidades e mutações.
 
 ## Próximos passos recomendados
 
