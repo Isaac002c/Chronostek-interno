@@ -99,6 +99,8 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const session = await authorizeFinanceApi("VIEW");
+  if ("response" in session) return session.response;
   try {
     const rawBody: unknown = await request.json();
     const permanent =
