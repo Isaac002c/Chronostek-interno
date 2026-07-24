@@ -605,7 +605,7 @@ export async function syncGoogleCalendar(
 ) {
   const calendarId = integration.selectedCalendarId;
   if (!calendarId) throw new Error("Selecione um calendário do Google.");
-  let syncToken =
+  const syncToken =
     !forceFull && integration.syncTokenEncrypted
       ? decryptCalendarSecret(
           integration.syncTokenEncrypted,

@@ -22,22 +22,18 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   Copy,
   Link2,
   Loader2,
-  MapPin,
   Plus,
   RefreshCw,
   Trash2,
-  Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { apiRequest, publicApiUrl } from "@/lib/api-client";
+import { apiRequest } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -172,7 +168,7 @@ export function CalendarClient() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [selected, setSelected] = useState<CalendarItem | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState(() => {
+  const [form, setForm] = useState<EventForm>(() => {
     const start = new Date();
     start.setMinutes(0, 0, 0);
     start.setHours(start.getHours() + 1);
@@ -845,33 +841,30 @@ function YearView({
   );
 }
 
-type EventForm = ReturnType<typeof useCalendarFormShape>;
-function useCalendarFormShape() {
-  return {
-    title: "",
-    description: "",
-    type: "REUNIAO",
-    startAt: "",
-    endAt: "",
-    allDay: false,
-    timezone: "America/Sao_Paulo",
-    location: "",
-    meetingUrl: "",
-    priority: "MEDIA",
-    privacy: "INTERNO",
-    responsibleId: "",
-    costCenterId: "",
-    clientId: "",
-    supplierId: "",
-    projectId: "",
-    participantEmails: "",
-    reminderMinutes: "30",
-    frequency: "",
-    recurrenceCount: "10",
-    createGoogleMeet: false,
-    syncToGoogle: false,
-  };
-}
+type EventForm = {
+  title: string;
+  description: string;
+  type: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  timezone: string;
+  location: string;
+  meetingUrl: string;
+  priority: string;
+  privacy: string;
+  responsibleId: string;
+  costCenterId: string;
+  clientId: string;
+  supplierId: string;
+  projectId: string;
+  participantEmails: string;
+  reminderMinutes: string;
+  frequency: string;
+  recurrenceCount: string;
+  createGoogleMeet: boolean;
+  syncToGoogle: boolean;
+};
 
 function EventPanel({
   selected,
