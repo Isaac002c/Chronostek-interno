@@ -2,92 +2,39 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { writeAudit } from "@/lib/audit";
-import { recurrenceOccurrences, competenceOf } from "@/lib/finance-rules";
-import { requireWrite, type ActionState } from "@/lib/actions";
+import { requireFinancePermission, type ActionState } from "@/lib/actions";
+import { generateMissingRecurringOccurrences } from "@/lib/finance-recurrence";
 
 /**
- * Gera os lançamentos financeiros devidos a partir das recorrências ativas,
- * do início de cada recorrência até o fim do mês atual. Idempotente: não
- * duplica lançamentos já gerados (checa recurringEntryId + competência).
+ * Rotina idempotente de reparo. Séries novas já nascem com todo o prazo gerado;
+ * esta ação apenas recompõe ocorrências ausentes sem duplicar cobranças.
  */
 export async function generateRecurrences(): Promise<ActionState> {
-  const auth = await requireWrite("FINANCEIRO");
+  const auth = await requireFinancePermission("CREATE_RECURRENCE");
   if ("error" in auth) return auth;
-  const { user } = auth;
+  const horizon = new Date();
+  horizon.setMonth(horizon.getMonth() + 12);
 
-  const now = new Date();
-  const horizon = new Date(now.getFullYear(), now.getMonth() + 1, 0); // fim do mês atual
-
-  let created = 0;
   try {
-    const recurrences = await prisma.recurringEntry.findMany({
-      where: { deletedAt: null, active: true },
+    const series = await prisma.recurringEntry.findMany({
+      where: { deletedAt: null, active: true, status: "ATIVA" },
+      select: { id: true },
     });
-
-    for (const r of recurrences) {
-      const occ = recurrenceOccurrences(r.startDate, horizon, r.frequency, r.dayOfMonth, r.endDate);
-      let last: { month: number; year: number } | null = null;
-
-      for (const d of occ) {
-        const comp = competenceOf(d);
-        const exists = await prisma.financialEntry.findFirst({
-          where: {
-            recurringEntryId: r.id,
-            competenceMonth: comp.month,
-            competenceYear: comp.year,
-            deletedAt: null,
-          },
-          select: { id: true },
-        });
-        if (exists) {
-          last = comp;
-          continue;
-        }
-        await prisma.financialEntry.create({
-          data: {
-            description: r.description,
-            type: r.type,
-            value: r.value,
-            dueDate: d,
-            competenceMonth: comp.month,
-            competenceYear: comp.year,
-            status: "PREVISTO",
-            categoryId: r.categoryId,
-            costCenterId: r.costCenterId,
-            clientId: r.clientId,
-            contractId: r.contractId,
-            supplierId: r.supplierId,
-            recurring: true,
-            recurringEntryId: r.id,
-            createdById: user.id,
-          },
-        });
-        created++;
-        last = comp;
-      }
-
-      if (last) {
-        await prisma.recurringEntry.update({
-          where: { id: r.id },
-          data: { lastGeneratedMonth: last.month, lastGeneratedYear: last.year },
-        });
-      }
+    for (const item of series) {
+      await generateMissingRecurringOccurrences(item.id, auth.user.id, horizon);
     }
-
-    await writeAudit({
-      userId: user.id,
-      action: "generate-recurrences",
-      entity: "RecurringEntry",
-      after: { created },
-      origin: "financeiro/contratos",
-    });
-  } catch {
-    return { error: "Não foi possível gerar as recorrências." };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Não foi possível gerar as recorrências.",
+    };
   }
 
   revalidatePath("/dashboard/financeiro/contratos");
   revalidatePath("/dashboard/financeiro/lancamentos");
+  revalidatePath("/dashboard/financeiro/mes-a-mes");
   revalidatePath("/dashboard/financeiro");
   return { ok: true };
 }

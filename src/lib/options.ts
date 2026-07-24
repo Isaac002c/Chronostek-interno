@@ -62,6 +62,54 @@ export async function getContractOptions(): Promise<Option[]> {
   }));
 }
 
+export async function getSupplierOptions(): Promise<Option[]> {
+  const rows = await prisma.supplier.findMany({
+    where: { deletedAt: null, active: true },
+    select: { id: true, name: true, legalName: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((row) => ({
+    value: row.id,
+    label: row.legalName ? `${row.name} · ${row.legalName}` : row.name,
+  }));
+}
+
+export async function getBankAccountOptions(): Promise<Option[]> {
+  const rows = await prisma.bankAccount.findMany({
+    where: { deletedAt: null, active: true },
+    select: { id: true, name: true, bank: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((row) => ({
+    value: row.id,
+    label: row.bank ? `${row.name} · ${row.bank}` : row.name,
+  }));
+}
+
+export async function getPaymentMethodConfigOptions(): Promise<Option[]> {
+  const rows = await prisma.paymentMethodConfig.findMany({
+    where: { deletedAt: null, active: true },
+    select: { id: true, code: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((row) => ({
+    value: row.id,
+    label: `${row.code} · ${row.name}`,
+  }));
+}
+
+export async function getFinancialProductOptions(): Promise<Option[]> {
+  const rows = await prisma.financialProduct.findMany({
+    where: { deletedAt: null, active: true },
+    select: { id: true, code: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((row) => ({
+    value: row.id,
+    label: `${row.code} · ${row.name}`,
+  }));
+}
+
 export type GoalParentCandidate = {
   value: string;
   label: string;

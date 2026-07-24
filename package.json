@@ -18,6 +18,7 @@
     "test": "tsx scripts/test-metas.ts",
     "test:auth": "tsx scripts/test-auth-security.ts",
     "test:finance": "tsx scripts/test-finance.ts",
+    "test:finance:db": "tsx scripts/test-finance-db.ts",
     "test:integration": "tsx scripts/test-integration.ts",
     "test:deploy": "tsx scripts/test-deployment-contract.ts",
     "postinstall": "prisma generate"

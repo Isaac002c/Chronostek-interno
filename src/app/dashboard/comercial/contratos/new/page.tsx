@@ -3,7 +3,14 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
-import { getClientOptions, getCostCenterOptions, getCategoryOptions } from "@/lib/options";
+import {
+  getClientOptions,
+  getCostCenterOptions,
+  getCategoryOptions,
+  getFinancialProductOptions,
+  getPaymentMethodConfigOptions,
+  getUserOptions,
+} from "@/lib/options";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,10 +30,13 @@ export default async function NewContractPage({
   const sp = await searchParams;
   const clientId = typeof sp.clientId === "string" ? sp.clientId : undefined;
 
-  const [clients, costCenters, categories] = await Promise.all([
+  const [clients, costCenters, categories, products, paymentMethods, users] = await Promise.all([
     getClientOptions(),
     getCostCenterOptions(),
     getCategoryOptions("RECEITA"),
+    getFinancialProductOptions(),
+    getPaymentMethodConfigOptions(),
+    getUserOptions(),
   ]);
 
   return (
@@ -46,6 +56,9 @@ export default async function NewContractPage({
             clients={clients}
             costCenters={costCenters}
             categories={categories}
+            products={products}
+            paymentMethods={paymentMethods}
+            users={users}
             defaults={{ clientId }}
           />
         </CardContent>

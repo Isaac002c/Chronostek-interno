@@ -9,6 +9,10 @@ import {
   getClientOptions,
   getContractOptions,
   getProjectOptions,
+  getSupplierOptions,
+  getBankAccountOptions,
+  getPaymentMethodConfigOptions,
+  getFinancialProductOptions,
 } from "@/lib/options";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,13 +33,27 @@ export default async function NewEntryPage({
   const sp = await searchParams;
   const type = typeof sp.type === "string" ? sp.type : "RECEITA";
 
-  const [costCenters, categories, clients, contracts, projects] =
+  const [
+    costCenters,
+    categories,
+    clients,
+    contracts,
+    projects,
+    suppliers,
+    bankAccounts,
+    paymentMethodConfigs,
+    products,
+  ] =
     await Promise.all([
       getCostCenterOptions(),
       getCategoryOptions(),
       getClientOptions(),
       getContractOptions(),
       getProjectOptions(),
+      getSupplierOptions(),
+      getBankAccountOptions(),
+      getPaymentMethodConfigOptions(),
+      getFinancialProductOptions(),
     ]);
 
   return (
@@ -57,6 +75,10 @@ export default async function NewEntryPage({
             clients={clients}
             contracts={contracts}
             projects={projects}
+            suppliers={suppliers}
+            bankAccounts={bankAccounts}
+            paymentMethodConfigs={paymentMethodConfigs}
+            products={products}
             defaults={{ type }}
           />
         </CardContent>

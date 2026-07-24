@@ -39,6 +39,16 @@ export type ContractDefaults = {
   status?: string;
   costCenterId?: string | null;
   categoryId?: string | null;
+  recurringEnabled?: boolean;
+  recurringFrequency?: string | null;
+  firstDueDate?: string;
+  installmentCount?: number | null;
+  recurringDurationMonths?: number | null;
+  adjustmentRate?: number | null;
+  renewalDate?: string;
+  financialProductId?: string | null;
+  paymentMethodConfigId?: string | null;
+  financialResponsibleId?: string | null;
   notes?: string | null;
 };
 
@@ -47,6 +57,9 @@ export function ContractForm({
   clients,
   costCenters,
   categories,
+  products,
+  paymentMethods,
+  users,
   defaults = {},
   submitLabel = "Salvar contrato",
 }: {
@@ -54,6 +67,9 @@ export function ContractForm({
   clients: Option[];
   costCenters: Option[];
   categories: Option[];
+  products: Option[];
+  paymentMethods: Option[];
+  users: Option[];
   defaults?: ContractDefaults;
   submitLabel?: string;
 }) {
@@ -99,7 +115,7 @@ export function ContractForm({
         </Field>
 
         {isRecurring && (
-          <div className="sm:col-span-2">
+          <div className="space-y-4 sm:col-span-2">
             <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-sm">
               <TrendingUp className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               {months > 0 ? (
@@ -115,6 +131,108 @@ export function ContractForm({
                   Informe valor mensal, início e fim para ver a receita projetada do contrato.
                 </span>
               )}
+            </div>
+            <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 sm:grid-cols-2">
+              <label className="flex items-center gap-2 sm:col-span-2">
+                <input
+                  name="recurringEnabled"
+                  type="checkbox"
+                  defaultChecked={defaults.recurringEnabled}
+                  className="size-4 rounded border-input accent-primary"
+                />
+                <span className="text-sm font-medium">
+                  Ativar geração automática de cobranças
+                </span>
+              </label>
+              <Field label="Periodicidade" htmlFor="recurringFrequency">
+                <Select
+                  id="recurringFrequency"
+                  name="recurringFrequency"
+                  defaultValue={defaults.recurringFrequency ?? "MENSAL"}
+                  options={[
+                    { value: "SEMANAL", label: "Semanal" },
+                    { value: "QUINZENAL", label: "Quinzenal" },
+                    { value: "MENSAL", label: "Mensal" },
+                    { value: "BIMESTRAL", label: "Bimestral" },
+                    { value: "TRIMESTRAL", label: "Trimestral" },
+                    { value: "SEMESTRAL", label: "Semestral" },
+                    { value: "ANUAL", label: "Anual" },
+                  ]}
+                />
+              </Field>
+              <Field label="Primeiro vencimento" htmlFor="firstDueDate">
+                <Input
+                  id="firstDueDate"
+                  name="firstDueDate"
+                  type="date"
+                  defaultValue={defaults.firstDueDate ?? defaults.startDate ?? ""}
+                />
+              </Field>
+              <Field label="Quantidade de cobranças" htmlFor="installmentCount">
+                <Input
+                  id="installmentCount"
+                  name="installmentCount"
+                  type="number"
+                  min="1"
+                  max="600"
+                  defaultValue={defaults.installmentCount ?? ""}
+                />
+              </Field>
+              <Field label="Duração (meses)" htmlFor="recurringDurationMonths">
+                <Input
+                  id="recurringDurationMonths"
+                  name="recurringDurationMonths"
+                  type="number"
+                  min="1"
+                  max="600"
+                  defaultValue={defaults.recurringDurationMonths ?? ""}
+                />
+              </Field>
+              <Field label="Reajuste previsto (%)" htmlFor="adjustmentRate">
+                <Input
+                  id="adjustmentRate"
+                  name="adjustmentRate"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue={defaults.adjustmentRate ?? ""}
+                />
+              </Field>
+              <Field label="Data de renovação" htmlFor="renewalDate">
+                <Input
+                  id="renewalDate"
+                  name="renewalDate"
+                  type="date"
+                  defaultValue={defaults.renewalDate ?? ""}
+                />
+              </Field>
+              <Field label="Produto / serviço" htmlFor="financialProductId">
+                <Select
+                  id="financialProductId"
+                  name="financialProductId"
+                  defaultValue={defaults.financialProductId ?? ""}
+                  placeholder="—"
+                  options={products}
+                />
+              </Field>
+              <Field label="Forma de recebimento" htmlFor="paymentMethodConfigId">
+                <Select
+                  id="paymentMethodConfigId"
+                  name="paymentMethodConfigId"
+                  defaultValue={defaults.paymentMethodConfigId ?? ""}
+                  placeholder="—"
+                  options={paymentMethods}
+                />
+              </Field>
+              <Field label="Responsável financeiro" htmlFor="financialResponsibleId">
+                <Select
+                  id="financialResponsibleId"
+                  name="financialResponsibleId"
+                  defaultValue={defaults.financialResponsibleId ?? ""}
+                  placeholder="—"
+                  options={users}
+                />
+              </Field>
             </div>
           </div>
         )}

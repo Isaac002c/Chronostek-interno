@@ -11,12 +11,18 @@ import {
   getClientOptions,
   getContractOptions,
   getProjectOptions,
+  getSupplierOptions,
+  getBankAccountOptions,
+  getPaymentMethodConfigOptions,
+  getFinancialProductOptions,
 } from "@/lib/options";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EntryForm } from "../../../entry-form";
 import { updateEntry } from "../../../actions";
+import { CancelRecurringForm } from "./cancel-recurring-form";
+import { PartialSettlementForm } from "./partial-settlement-form";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +35,18 @@ export default async function EditEntryPage({
   if (!canWrite(user.role)) redirect("/dashboard/financeiro/lancamentos");
 
   const { id } = await params;
-  const [entry, costCenters, categories, clients, contracts, projects] =
+  const [
+    entry,
+    costCenters,
+    categories,
+    clients,
+    contracts,
+    projects,
+    suppliers,
+    bankAccounts,
+    paymentMethodConfigs,
+    products,
+  ] =
     await Promise.all([
       prisma.financialEntry.findFirst({ where: { id, deletedAt: null } }),
       getCostCenterOptions(),
@@ -37,6 +54,10 @@ export default async function EditEntryPage({
       getClientOptions(),
       getContractOptions(),
       getProjectOptions(),
+      getSupplierOptions(),
+      getBankAccountOptions(),
+      getPaymentMethodConfigOptions(),
+      getFinancialProductOptions(),
     ]);
 
   if (!entry) notFound();
@@ -60,6 +81,10 @@ export default async function EditEntryPage({
             clients={clients}
             contracts={contracts}
             projects={projects}
+            suppliers={suppliers}
+            bankAccounts={bankAccounts}
+            paymentMethodConfigs={paymentMethodConfigs}
+            products={products}
             submitLabel="Salvar alterações"
             defaults={{
               description: entry.description,
@@ -75,7 +100,13 @@ export default async function EditEntryPage({
               clientId: entry.clientId,
               contractId: entry.contractId,
               projectId: entry.projectId,
+              supplierId: entry.supplierId,
+              productId: entry.productId,
+              bankAccountId: entry.bankAccountId,
+              paymentMethodConfigId: entry.paymentMethodConfigId,
               recurring: entry.recurring,
+              recurringEntryId: entry.recurringEntryId,
+              recurrenceSequence: entry.recurrenceSequence,
               installments: entry.installments,
               installmentNumber: entry.installmentNumber,
               paymentMethod: entry.paymentMethod,
@@ -84,6 +115,34 @@ export default async function EditEntryPage({
           />
         </CardContent>
       </Card>
+      {entry.status !== "CANCELADO" &&
+        entry.status !== "PAGO" &&
+        (entry.paidValue ?? 0) < entry.value && (
+          <Card className="p-5">
+            <h2 className="mb-1 text-sm font-semibold">Baixa parcial</h2>
+            <p className="mb-4 text-xs text-muted-foreground">
+              Em aberto: R$ {(entry.value - (entry.paidValue ?? 0)).toFixed(2)}.
+              O histórico anterior é preservado na auditoria.
+            </p>
+            <PartialSettlementForm
+              entryId={entry.id}
+              outstanding={entry.value - (entry.paidValue ?? 0)}
+              type={entry.type}
+            />
+          </Card>
+        )}
+      {entry.recurringEntryId && entry.recurrenceSequence && (
+        <Card className="border-error/30 p-5">
+          <h2 className="mb-1 text-sm font-semibold">Cancelar recorrência</h2>
+          <p className="mb-4 text-xs text-muted-foreground">
+            O histórico liquidado nunca é excluído. Escolha o alcance e justifique.
+          </p>
+          <CancelRecurringForm
+            entryId={entry.id}
+            occurrenceNumber={entry.recurrenceSequence}
+          />
+        </Card>
+      )}
     </>
   );
 }

@@ -5,7 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
 import { canWrite } from "@/lib/rbac";
 import { toDateInputValue } from "@/lib/format";
-import { getClientOptions, getCostCenterOptions, getCategoryOptions } from "@/lib/options";
+import {
+  getClientOptions,
+  getCostCenterOptions,
+  getCategoryOptions,
+  getFinancialProductOptions,
+  getPaymentMethodConfigOptions,
+  getUserOptions,
+} from "@/lib/options";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,11 +30,14 @@ export default async function EditContractPage({
   if (!canWrite(user.role)) redirect("/dashboard/comercial/contratos");
 
   const { id } = await params;
-  const [contract, clients, costCenters, categories] = await Promise.all([
+  const [contract, clients, costCenters, categories, products, paymentMethods, users] = await Promise.all([
     prisma.contract.findFirst({ where: { id, deletedAt: null } }),
     getClientOptions(),
     getCostCenterOptions(),
     getCategoryOptions("RECEITA"),
+    getFinancialProductOptions(),
+    getPaymentMethodConfigOptions(),
+    getUserOptions(),
   ]);
 
   if (!contract) notFound();
@@ -49,6 +59,9 @@ export default async function EditContractPage({
             clients={clients}
             costCenters={costCenters}
             categories={categories}
+            products={products}
+            paymentMethods={paymentMethods}
+            users={users}
             submitLabel="Salvar alterações"
             defaults={{
               clientId: contract.clientId,
@@ -61,6 +74,16 @@ export default async function EditContractPage({
               status: contract.status,
               costCenterId: contract.costCenterId,
               categoryId: contract.categoryId,
+              recurringEnabled: contract.recurringEnabled,
+              recurringFrequency: contract.recurringFrequency,
+              firstDueDate: toDateInputValue(contract.firstDueDate),
+              installmentCount: contract.installmentCount,
+              recurringDurationMonths: contract.recurringDurationMonths,
+              adjustmentRate: contract.adjustmentRate,
+              renewalDate: toDateInputValue(contract.renewalDate),
+              financialProductId: contract.financialProductId,
+              paymentMethodConfigId: contract.paymentMethodConfigId,
+              financialResponsibleId: contract.financialResponsibleId,
               notes: contract.notes,
             }}
           />

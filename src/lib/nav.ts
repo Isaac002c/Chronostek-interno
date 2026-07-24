@@ -145,6 +145,7 @@ export const MODULE_TABS: Record<string, NavTab[]> = {
     { label: "Contratos e Recorrências", href: "/dashboard/financeiro/contratos", module: "FINANCEIRO" },
     { label: "Orçamentos", href: "/dashboard/financeiro/orcamentos", module: "FINANCEIRO" },
     { label: "Real × Orçado", href: "/dashboard/financeiro/real-x-orcado", module: "FINANCEIRO" },
+    { label: "Mês a Mês", href: "/dashboard/financeiro/mes-a-mes", module: "FINANCEIRO" },
     { label: "DRE", href: "/dashboard/financeiro/dre", module: "FINANCEIRO" },
     { label: "Fluxo de Caixa", href: "/dashboard/financeiro/fluxo-caixa", module: "FINANCEIRO" },
     { label: "Projeções", href: "/dashboard/financeiro/projecoes", module: "FINANCEIRO" },

@@ -1,25 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Role } from "@prisma/client";
-import { getCurrentUser } from "@/lib/session";
-import { isAdmin } from "@/lib/rbac";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
 import { CLOSING_CHECKLIST } from "@/lib/closing";
-import { str, optStr, optInt, type ActionState } from "@/lib/actions";
-
-function canClose(role: Role) {
-  return isAdmin(role) || role === "FINANCEIRO";
-}
+import {
+  requireFinancePermission,
+  str,
+  optStr,
+  optInt,
+  type ActionState,
+} from "@/lib/actions";
 
 export async function closeMonth(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const user = await getCurrentUser();
-  if (!user || !canClose(user.role))
+  const auth = await requireFinancePermission("CLOSE_PERIOD");
+  if ("error" in auth)
     return { error: "Você não tem permissão para fechar o mês." };
+  const { user } = auth;
 
   const month = optInt(fd, "month");
   const year = optInt(fd, "year");
@@ -69,9 +69,10 @@ export async function reopenMonth(
   _prev: ActionState,
   fd: FormData,
 ): Promise<ActionState> {
-  const user = await getCurrentUser();
-  if (!user || !isAdmin(user.role))
+  const auth = await requireFinancePermission("REOPEN_PERIOD");
+  if ("error" in auth)
     return { error: "Apenas administradores/sócios podem reabrir um mês fechado." };
+  const { user } = auth;
 
   const month = optInt(fd, "month");
   const year = optInt(fd, "year");

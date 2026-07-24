@@ -25,6 +25,8 @@ import { generateRecurrences } from "./actions";
 export const dynamic = "force-dynamic";
 
 const FREQ_LABEL: Record<string, string> = {
+  SEMANAL: "Semanal",
+  QUINZENAL: "Quinzenal",
   MENSAL: "Mensal",
   BIMESTRAL: "Bimestral",
   TRIMESTRAL: "Trimestral",
@@ -159,6 +161,8 @@ export default async function ContratosRecorrenciasPage() {
                   <TableHead>Categoria</TableHead>
                   <TableHead>Frequência</TableHead>
                   <TableHead>Dia</TableHead>
+                  <TableHead>Ocorrências</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                 </TableRow>
               </TableHeader>
@@ -176,6 +180,14 @@ export default async function ContratosRecorrenciasPage() {
                     </TableCell>
                     <TableCell className="text-sm">{FREQ_LABEL[r.frequency]}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">dia {r.dayOfMonth}</TableCell>
+                    <TableCell className="text-sm tabular-nums">
+                      {r.generatedOccurrences}/{r.totalOccurrences ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge tone={r.status === "ATIVA" ? "success" : "neutral"}>
+                        {r.status}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
                       {formatCurrency(r.value)}
                     </TableCell>

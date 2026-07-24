@@ -85,13 +85,24 @@ export function competenceRange(from: Competence, to: Competence): Competence[] 
   return out;
 }
 
-const FREQUENCY_MONTHS: Record<RecurringFrequency, number> = {
+const FREQUENCY_MONTHS: Partial<Record<RecurringFrequency, number>> = {
   MENSAL: 1,
   BIMESTRAL: 2,
   TRIMESTRAL: 3,
   SEMESTRAL: 6,
   ANUAL: 12,
 };
+
+const FREQUENCY_DAYS: Partial<Record<RecurringFrequency, number>> = {
+  SEMANAL: 7,
+  QUINZENAL: 15,
+};
+
+export function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
 
 /**
  * Ocorrências de uma recorrência entre startDate e o horizonte (inclusive),
@@ -104,25 +115,91 @@ export function recurrenceOccurrences(
   dayOfMonth: number,
   endDate?: Date | null,
 ): Date[] {
-  const step = FREQUENCY_MONTHS[frequency];
   const limit = endDate && endDate < horizon ? endDate : horizon;
   const out: Date[] = [];
-  let cursor = clampDay(startDate, dayOfMonth);
-  // Se o primeiro cursor cai antes do start, avança.
+  const dayStep = FREQUENCY_DAYS[frequency];
+  const monthStep = FREQUENCY_MONTHS[frequency];
+  let cursor = dayStep ? new Date(startDate) : clampDay(startDate, dayOfMonth);
   let guard = 0;
   while (cursor <= limit && guard < 600) {
     if (cursor >= startDate) out.push(new Date(cursor));
-    cursor = clampDay(addMonths(cursor, step), dayOfMonth);
+    cursor = dayStep
+      ? addDays(cursor, dayStep)
+      : clampDay(addMonths(cursor, monthStep ?? 1), dayOfMonth);
     guard++;
   }
   return out;
 }
 
-function clampDay(date: Date, day: number): Date {
+export function clampDay(date: Date, day: number): Date {
   const d = new Date(date);
   const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
   d.setDate(Math.min(Math.max(1, day), lastDay));
   return d;
+}
+
+export type RecurrencePlanInput = {
+  startDate: Date;
+  frequency: RecurringFrequency;
+  dayOfMonth: number;
+  totalOccurrences?: number | null;
+  durationMonths?: number | null;
+  endDate?: Date | null;
+};
+
+/**
+ * Plano finito usado na criação imediata de uma série. Pelo menos um dos
+ * limites (quantidade, duração ou data final) deve existir.
+ */
+export function buildRecurrencePlan(input: RecurrencePlanInput): Date[] {
+  const count =
+    input.totalOccurrences && input.totalOccurrences > 0
+      ? Math.min(input.totalOccurrences, 600)
+      : null;
+  let horizon = input.endDate ? new Date(input.endDate) : null;
+
+  if (input.durationMonths && input.durationMonths > 0) {
+    const durationEnd = addMonths(input.startDate, input.durationMonths);
+    durationEnd.setMilliseconds(durationEnd.getMilliseconds() - 1);
+    if (!horizon || durationEnd < horizon) horizon = durationEnd;
+  }
+
+  if (!count && !horizon) {
+    throw new Error("Informe quantidade, duração ou data final da recorrência.");
+  }
+
+  const safeHorizon = horizon ?? addMonths(input.startDate, 600);
+  const dates = recurrenceOccurrences(
+    input.startDate,
+    safeHorizon,
+    input.frequency,
+    input.dayOfMonth,
+    horizon,
+  );
+  return count ? dates.slice(0, count) : dates;
+}
+
+export type RecurrenceScope = "OCCURRENCE" | "FUTURE" | "SERIES";
+
+export function recurrenceScopeSequences(
+  sequences: readonly number[],
+  current: number,
+  scope: RecurrenceScope,
+): number[] {
+  if (scope === "OCCURRENCE") {
+    return sequences.includes(current) ? [current] : [];
+  }
+  if (scope === "FUTURE") {
+    return sequences.filter((sequence) => sequence >= current);
+  }
+  return [...sequences];
+}
+
+export function recurrenceIdempotencyKey(seriesId: string, sequence: number): string {
+  if (!seriesId || !Number.isInteger(sequence) || sequence <= 0) {
+    throw new Error("Série e sequência válidas são obrigatórias.");
+  }
+  return `${seriesId}:${sequence}`;
 }
 
 // ─────────────── Status derivado ───────────────

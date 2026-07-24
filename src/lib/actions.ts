@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { getCurrentUser, type SessionUser } from "@/lib/session";
 import { canAccessModule, canWrite, type NavModule } from "@/lib/rbac";
+import {
+  canFinance,
+  type FinancePermission,
+} from "@/lib/finance-permissions";
 
 export type { ActionState } from "@/lib/action-state";
 
@@ -14,6 +18,18 @@ export async function requireWrite(module: NavModule): Promise<
     return { error: "Você não tem acesso a este módulo." };
   if (!canWrite(user.role))
     return { error: "Você não tem permissão para esta ação." };
+  return { user };
+}
+
+/** Garante capacidade financeira específica, sempre validada no backend. */
+export async function requireFinancePermission(
+  permission: FinancePermission,
+): Promise<{ user: SessionUser } | { error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+  if (!canFinance(user.role, permission)) {
+    return { error: "Você não tem permissão para esta ação financeira." };
+  }
   return { user };
 }
 

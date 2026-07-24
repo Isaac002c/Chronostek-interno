@@ -146,11 +146,74 @@ enum BankAccountType {
 }
 
 enum RecurringFrequency {
+  SEMANAL
+  QUINZENAL
   MENSAL
   BIMESTRAL
   TRIMESTRAL
   SEMESTRAL
   ANUAL
+}
+
+enum RecurringSeriesStatus {
+  ATIVA
+  PAUSADA
+  CONCLUIDA
+  CANCELADA
+}
+
+enum ProjectionScenarioType {
+  CONSERVADOR
+  BASE
+  OTIMISTA
+  PERSONALIZADO
+}
+
+enum ProjectionStatus {
+  RASCUNHO
+  PUBLICADA
+  ARQUIVADA
+}
+
+enum ProjectionLineType {
+  FATURAMENTO
+  RECEBIMENTOS
+  RECEITA_RECORRENTE
+  RECEITA_PONTUAL
+  CUSTO_DIRETO
+  DESPESA
+  IMPOSTO
+  INVESTIMENTO
+  INADIMPLENCIA
+  SALDO_INICIAL
+  SALDO_FINAL
+  RESULTADO
+  PERSONALIZADA
+}
+
+enum ProjectionValueSource {
+  AUTOMATICO
+  MANUAL
+  SOBRESCRITO
+  REALIZADO
+}
+
+enum DreModelStatus {
+  RASCUNHO
+  PUBLICADO
+  ARQUIVADO
+}
+
+enum DreRowKind {
+  GRUPO
+  CONTA
+  SUBTOTAL
+  FORMULA
+}
+
+enum FinancialProductType {
+  PRODUTO
+  SERVICO
 }
 
 enum MonthlyClosingStatus {
@@ -542,15 +605,29 @@ model User {
   approvalsResponded     ApprovalRequest[] @relation("ApprovalApprover")
   auditLogs              AuditLog[]
 
-  financialCreated     FinancialEntry[]       @relation("FinancialCreatedBy")
-  financialResponsible FinancialEntry[]       @relation("FinancialResponsible")
-  financialApproved    FinancialEntry[]       @relation("FinancialApprovedBy")
-  recurringCreated     RecurringEntry[]       @relation("RecurringCreatedBy")
-  closingsClosed       MonthlyClosing[]       @relation("ClosingClosedBy")
-  closingsReopened     MonthlyClosing[]       @relation("ClosingReopenedBy")
-  attachmentsUploaded  Attachment[]           @relation("AttachmentUploadedBy")
-  reconciliations      Reconciliation[]       @relation("ReconciledBy")
-  orgSettingsUpdated   OrganizationSettings[] @relation("OrgSettingsUpdatedBy")
+  financialCreated         FinancialEntry[]           @relation("FinancialCreatedBy")
+  financialResponsible     FinancialEntry[]           @relation("FinancialResponsible")
+  financialApproved        FinancialEntry[]           @relation("FinancialApprovedBy")
+  recurringCreated         RecurringEntry[]           @relation("RecurringCreatedBy")
+  recurringResponsible     RecurringEntry[]           @relation("RecurringResponsible")
+  recurringUpdated         RecurringEntry[]           @relation("RecurringUpdatedBy")
+  recurringHistory         RecurringEntryHistory[]
+  projectionsCreated       FinancialProjection[]      @relation("ProjectionCreatedBy")
+  projectionsOwned         FinancialProjection[]      @relation("ProjectionResponsible")
+  projectionValues         FinancialProjectionValue[] @relation("ProjectionValueUpdatedBy")
+  projectionHistory        ProjectionValueHistory[]
+  dreModelsCreated         DreModel[]                 @relation("DreModelCreatedBy")
+  dreVersionsPublished     DreModelVersion[]          @relation("DreVersionPublishedBy")
+  bankAccountsOwned        BankAccount[]              @relation("BankAccountResponsible")
+  suppliersOwned           Supplier[]                 @relation("SupplierResponsible")
+  paymentMethodsCreated    PaymentMethodConfig[]      @relation("PaymentMethodCreatedBy")
+  financialProductsCreated FinancialProduct[]         @relation("FinancialProductCreatedBy")
+  contractsFinancialOwned  Contract[]                 @relation("ContractFinancialResponsible")
+  closingsClosed           MonthlyClosing[]           @relation("ClosingClosedBy")
+  closingsReopened         MonthlyClosing[]           @relation("ClosingReopenedBy")
+  attachmentsUploaded      Attachment[]               @relation("AttachmentUploadedBy")
+  reconciliations          Reconciliation[]           @relation("ReconciledBy")
+  orgSettingsUpdated       OrganizationSettings[]     @relation("OrgSettingsUpdatedBy")
 
   @@index([role])
   @@index([status])
@@ -570,18 +647,18 @@ model CostCenter {
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
-  responsibleUser     User?               @relation("CostCenterResponsible", fields: [responsibleUserId], references: [id])
-  parent              CostCenter?         @relation("CostCenterHierarchy", fields: [parentCostCenterId], references: [id])
-  children            CostCenter[]        @relation("CostCenterHierarchy")
-  users               User[]              @relation("UserCostCenter")
+  responsibleUser     User?                     @relation("CostCenterResponsible", fields: [responsibleUserId], references: [id])
+  parent              CostCenter?               @relation("CostCenterHierarchy", fields: [parentCostCenterId], references: [id])
+  children            CostCenter[]              @relation("CostCenterHierarchy")
+  users               User[]                    @relation("UserCostCenter")
   contracts           Contract[]
   financialEntries    FinancialEntry[]
-  financialCategories FinancialCategory[] @relation("CategoryCostCenter")
+  financialCategories FinancialCategory[]       @relation("CategoryCostCenter")
   projects            Project[]
   campaigns           MarketingCampaign[]
   proposals           Proposal[]
   goals               Goal[]
-  goalIndicators      GoalIndicator[]     @relation("IndicatorCostCenter")
+  goalIndicators      GoalIndicator[]           @relation("IndicatorCostCenter")
   tasks               Task[]
   budgets             Budget[]
   budgetLines         BudgetLine[]
@@ -591,7 +668,10 @@ model CostCenter {
   legalDemands        LegalDemand[]
   legalRisks          LegalRisk[]
   recurringEntries    RecurringEntry[]
-  approvalRules       ApprovalRule[]      @relation("ApprovalRuleCostCenter")
+  approvalRules       ApprovalRule[]            @relation("ApprovalRuleCostCenter")
+  projectionLines     FinancialProjectionLine[]
+  dreMappings         DreRowMapping[]
+  suppliersDefault    Supplier[]                @relation("SupplierDefaultCostCenter")
 
   @@index([active])
   @@index([type])
@@ -610,14 +690,17 @@ model FinancialCategory {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
-  costCenter       CostCenter?         @relation("CategoryCostCenter", fields: [costCenterId], references: [id])
-  parent           FinancialCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children         FinancialCategory[] @relation("CategoryHierarchy")
+  costCenter       CostCenter?               @relation("CategoryCostCenter", fields: [costCenterId], references: [id])
+  parent           FinancialCategory?        @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children         FinancialCategory[]       @relation("CategoryHierarchy")
   financialEntries FinancialEntry[]
   contracts        Contract[]
   budgetLines      BudgetLine[]
   recurringEntries RecurringEntry[]
-  approvalRules    ApprovalRule[]      @relation("ApprovalRuleCategory")
+  approvalRules    ApprovalRule[]            @relation("ApprovalRuleCategory")
+  projectionLines  FinancialProjectionLine[]
+  dreMappings      DreRowMapping[]
+  suppliersDefault Supplier[]                @relation("SupplierDefaultCategory")
 
   @@index([type])
   @@index([parentId])
@@ -766,17 +849,18 @@ model Client {
   updatedAt             DateTime     @updatedAt
   deletedAt             DateTime?
 
-  internalResponsible User?            @relation("ClientResponsible", fields: [internalResponsibleId], references: [id])
+  internalResponsible User?                     @relation("ClientResponsible", fields: [internalResponsibleId], references: [id])
   contracts           Contract[]
   proposals           Proposal[]
   projects            Project[]
   financialEntries    FinancialEntry[]
-  convertedLeads      Lead[]           @relation("LeadConverted")
+  convertedLeads      Lead[]                    @relation("LeadConverted")
   legalContracts      LegalContract[]
   legalDocuments      LegalDocument[]
   legalDemands        LegalDemand[]
   recurringEntries    RecurringEntry[]
-  tasks               Task[]           @relation("ClientTasks")
+  projectionLines     FinancialProjectionLine[]
+  tasks               Task[]                    @relation("ClientTasks")
 
   @@index([status])
   @@index([internalResponsibleId])
@@ -805,83 +889,111 @@ model Proposal {
 }
 
 model Contract {
-  id           String         @id @default(cuid())
-  clientId     String
-  title        String
-  type         ContractType
-  totalValue   Float?
-  monthlyValue Float?
-  startDate    DateTime?
-  endDate      DateTime?
-  status       ContractStatus @default(ATIVO)
-  costCenterId String?
-  categoryId   String?
-  notes        String?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  deletedAt    DateTime?
+  id                      String              @id @default(cuid())
+  clientId                String
+  title                   String
+  type                    ContractType
+  totalValue              Float?
+  monthlyValue            Float?
+  startDate               DateTime?
+  endDate                 DateTime?
+  status                  ContractStatus      @default(ATIVO)
+  costCenterId            String?
+  categoryId              String?
+  recurringEnabled        Boolean             @default(false)
+  recurringFrequency      RecurringFrequency?
+  firstDueDate            DateTime?
+  installmentCount        Int?
+  recurringDurationMonths Int?
+  adjustmentRate          Float?
+  renewalDate             DateTime?
+  financialProductId      String?
+  paymentMethodConfigId   String?
+  financialResponsibleId  String?
+  notes                   String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  deletedAt               DateTime?
 
-  client           Client             @relation(fields: [clientId], references: [id])
-  costCenter       CostCenter?        @relation(fields: [costCenterId], references: [id])
-  category         FinancialCategory? @relation(fields: [categoryId], references: [id])
-  financialEntries FinancialEntry[]
-  projects         Project[]
-  recurringEntries RecurringEntry[]
-  tasks            Task[]             @relation("ContractTasks")
+  client               Client                    @relation(fields: [clientId], references: [id])
+  costCenter           CostCenter?               @relation(fields: [costCenterId], references: [id])
+  category             FinancialCategory?        @relation(fields: [categoryId], references: [id])
+  financialProduct     FinancialProduct?         @relation(fields: [financialProductId], references: [id])
+  paymentMethodConfig  PaymentMethodConfig?      @relation(fields: [paymentMethodConfigId], references: [id])
+  financialResponsible User?                     @relation("ContractFinancialResponsible", fields: [financialResponsibleId], references: [id])
+  financialEntries     FinancialEntry[]
+  projects             Project[]
+  recurringEntries     RecurringEntry[]
+  projectionLines      FinancialProjectionLine[]
+  tasks                Task[]                    @relation("ContractTasks")
 
   @@index([status])
   @@index([type])
   @@index([clientId])
+  @@index([financialProductId])
+  @@index([paymentMethodConfigId])
+  @@index([financialResponsibleId])
 }
 
 // ─────────────────────────────── FINANCEIRO ───────────────────────────────
 
 model FinancialEntry {
-  id                String          @id @default(cuid())
-  description       String
-  type              FinancialType
-  value             Float           @default(0) // valor previsto/principal
-  paidValue         Float? // valor realizado (pago/recebido, inclui parciais)
-  dueDate           DateTime?
-  paymentDate       DateTime?
-  competenceMonth   Int // 1-12
-  competenceYear    Int
-  status            FinancialStatus @default(PENDENTE)
-  costCenterId      String?
-  categoryId        String?
-  clientId          String?
-  contractId        String?
-  projectId         String?
-  campaignId        String?
-  supplierId        String?
-  bankAccountId     String?
-  recurringEntryId  String?
-  recurring         Boolean         @default(false)
-  installments      Int?
-  installmentNumber Int?
-  paymentMethod     PaymentMethod?
-  createdById       String?
-  responsibleId     String?
-  approvedById      String?
-  notes             String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  deletedAt         DateTime?
+  id                    String          @id @default(cuid())
+  description           String
+  type                  FinancialType
+  value                 Float           @default(0) // valor previsto/principal
+  paidValue             Float? // valor realizado (pago/recebido, inclui parciais)
+  dueDate               DateTime?
+  paymentDate           DateTime?
+  competenceMonth       Int // 1-12
+  competenceYear        Int
+  status                FinancialStatus @default(PENDENTE)
+  costCenterId          String?
+  categoryId            String?
+  clientId              String?
+  contractId            String?
+  projectId             String?
+  campaignId            String?
+  supplierId            String?
+  bankAccountId         String?
+  recurringEntryId      String?
+  paymentMethodConfigId String?
+  productId             String?
+  recurrenceSequence    Int?
+  recurrenceKey         String?
+  recurrenceException   Boolean         @default(false)
+  originalDueDate       DateTime?
+  recurring             Boolean         @default(false)
+  installments          Int?
+  installmentNumber     Int?
+  paymentMethod         PaymentMethod?
+  createdById           String?
+  responsibleId         String?
+  approvedById          String?
+  notes                 String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  deletedAt             DateTime?
 
-  costCenter     CostCenter?        @relation(fields: [costCenterId], references: [id])
-  category       FinancialCategory? @relation(fields: [categoryId], references: [id])
-  client         Client?            @relation(fields: [clientId], references: [id])
-  contract       Contract?          @relation(fields: [contractId], references: [id])
-  project        Project?           @relation(fields: [projectId], references: [id])
-  campaign       MarketingCampaign? @relation(fields: [campaignId], references: [id])
-  supplier       Supplier?          @relation(fields: [supplierId], references: [id])
-  bankAccount    BankAccount?       @relation(fields: [bankAccountId], references: [id])
-  recurringEntry RecurringEntry?    @relation(fields: [recurringEntryId], references: [id])
-  createdBy      User?              @relation("FinancialCreatedBy", fields: [createdById], references: [id])
-  responsible    User?              @relation("FinancialResponsible", fields: [responsibleId], references: [id])
-  approvedBy     User?              @relation("FinancialApprovedBy", fields: [approvedById], references: [id])
-  tasks          Task[]             @relation("FinancialTasks")
+  costCenter          CostCenter?          @relation(fields: [costCenterId], references: [id])
+  category            FinancialCategory?   @relation(fields: [categoryId], references: [id])
+  client              Client?              @relation(fields: [clientId], references: [id])
+  contract            Contract?            @relation(fields: [contractId], references: [id])
+  project             Project?             @relation(fields: [projectId], references: [id])
+  campaign            MarketingCampaign?   @relation(fields: [campaignId], references: [id])
+  supplier            Supplier?            @relation(fields: [supplierId], references: [id])
+  bankAccount         BankAccount?         @relation(fields: [bankAccountId], references: [id])
+  recurringEntry      RecurringEntry?      @relation("RecurringGeneratedEntries", fields: [recurringEntryId], references: [id])
+  primaryForSeries    RecurringEntry?      @relation("RecurringPrimaryEntry")
+  paymentMethodConfig PaymentMethodConfig? @relation(fields: [paymentMethodConfigId], references: [id])
+  product             FinancialProduct?    @relation(fields: [productId], references: [id])
+  createdBy           User?                @relation("FinancialCreatedBy", fields: [createdById], references: [id])
+  responsible         User?                @relation("FinancialResponsible", fields: [responsibleId], references: [id])
+  approvedBy          User?                @relation("FinancialApprovedBy", fields: [approvedById], references: [id])
+  tasks               Task[]               @relation("FinancialTasks")
 
+  @@unique([recurringEntryId, recurrenceSequence])
+  @@unique([recurrenceKey])
   @@index([type])
   @@index([status])
   @@index([competenceYear, competenceMonth])
@@ -891,6 +1003,8 @@ model FinancialEntry {
   @@index([supplierId])
   @@index([bankAccountId])
   @@index([recurringEntryId])
+  @@index([paymentMethodConfigId])
+  @@index([productId])
 }
 
 // ─────────────────────────────── INOVAÇÃO / TI ───────────────────────────────
@@ -914,13 +1028,15 @@ model Project {
   updatedAt     DateTime      @updatedAt
   deletedAt     DateTime?
 
-  client           Client?          @relation(fields: [clientId], references: [id])
-  contract         Contract?        @relation(fields: [contractId], references: [id])
-  responsible      User?            @relation("ProjectResponsible", fields: [responsibleId], references: [id])
-  costCenter       CostCenter?      @relation(fields: [costCenterId], references: [id])
+  client           Client?                   @relation(fields: [clientId], references: [id])
+  contract         Contract?                 @relation(fields: [contractId], references: [id])
+  responsible      User?                     @relation("ProjectResponsible", fields: [responsibleId], references: [id])
+  costCenter       CostCenter?               @relation(fields: [costCenterId], references: [id])
   timesheets       Timesheet[]
   financialEntries FinancialEntry[]
-  tasks            Task[]           @relation("ProjectTasks")
+  recurringEntries RecurringEntry[]
+  projectionLines  FinancialProjectionLine[]
+  tasks            Task[]                    @relation("ProjectTasks")
 
   @@index([status])
   @@index([type])
@@ -1400,83 +1516,395 @@ model LoginThrottle {
  * Fornecedor (contas a pagar). Não confundir com Client (comercial).
  */
 model Supplier {
-  id        String    @id @default(cuid())
-  name      String
-  document  String?
-  email     String?
-  phone     String?
-  notes     String?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  id                    String    @id @default(cuid())
+  tenantId              String    @default("default")
+  name                  String
+  legalName             String?
+  document              String?
+  email                 String?
+  phone                 String?
+  category              String?
+  defaultCategoryId     String?
+  defaultCostCenterId   String?
+  responsibleId         String?
+  bankDetailsMasked     String?
+  bankDetailsRestricted Boolean   @default(true)
+  notes                 String?
+  active                Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
 
-  financialEntries FinancialEntry[]
-  recurringEntries RecurringEntry[]
+  financialEntries  FinancialEntry[]
+  recurringEntries  RecurringEntry[]
+  projectionLines   FinancialProjectionLine[]
+  defaultCategory   FinancialCategory?        @relation("SupplierDefaultCategory", fields: [defaultCategoryId], references: [id])
+  defaultCostCenter CostCenter?               @relation("SupplierDefaultCostCenter", fields: [defaultCostCenterId], references: [id])
+  responsible       User?                     @relation("SupplierResponsible", fields: [responsibleId], references: [id])
 
   @@index([active])
+  @@index([tenantId, active])
+  @@index([defaultCategoryId])
+  @@index([defaultCostCenterId])
+  @@index([responsibleId])
 }
 
 /**
  * Conta bancária / caixa (saldo e fluxo de caixa).
  */
 model BankAccount {
-  id             String          @id @default(cuid())
-  name           String
-  bank           String?
-  agency         String?
-  number         String?
-  type           BankAccountType @default(CORRENTE)
-  initialBalance Float           @default(0)
-  active         Boolean         @default(true)
-  notes          String?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  deletedAt      DateTime?
+  id                      String          @id @default(cuid())
+  tenantId                String          @default("default")
+  name                    String
+  bank                    String?
+  agency                  String?
+  number                  String?
+  type                    BankAccountType @default(CORRENTE)
+  initialBalance          Float           @default(0)
+  initialBalanceDate      DateTime?
+  responsibleId           String?
+  sensitiveDataRestricted Boolean         @default(true)
+  active                  Boolean         @default(true)
+  notes                   String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  deletedAt               DateTime?
 
   financialEntries FinancialEntry[]
   reconciliations  Reconciliation[]
+  recurringEntries RecurringEntry[]
+  paymentMethods   PaymentMethodConfig[]
+  responsible      User?                 @relation("BankAccountResponsible", fields: [responsibleId], references: [id])
 
   @@index([active])
+  @@index([tenantId, active])
+  @@index([responsibleId])
 }
 
 /**
  * Modelo de recorrência: gera lançamentos financeiros periódicos.
  */
 model RecurringEntry {
-  id                 String             @id @default(cuid())
-  description        String
-  type               FinancialType
-  value              Float              @default(0)
-  frequency          RecurringFrequency @default(MENSAL)
-  dayOfMonth         Int                @default(1)
-  startDate          DateTime
-  endDate            DateTime?
-  active             Boolean            @default(true)
-  categoryId         String?
-  costCenterId       String?
-  clientId           String?
-  contractId         String?
-  supplierId         String?
-  lastGeneratedYear  Int?
-  lastGeneratedMonth Int?
-  notes              String?
-  createdById        String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  deletedAt          DateTime?
+  id                    String                @id @default(cuid())
+  tenantId              String                @default("default")
+  idempotencyKey        String?               @unique
+  primaryEntryId        String?               @unique
+  description           String
+  type                  FinancialType
+  value                 Float                 @default(0)
+  frequency             RecurringFrequency    @default(MENSAL)
+  dayOfMonth            Int                   @default(1)
+  startDate             DateTime
+  endDate               DateTime?
+  status                RecurringSeriesStatus @default(ATIVA)
+  active                Boolean               @default(true)
+  totalOccurrences      Int?
+  generatedOccurrences  Int                   @default(0)
+  durationMonths        Int?
+  nextGenerationDate    DateTime?
+  startCompetenceMonth  Int?
+  startCompetenceYear   Int?
+  categoryId            String?
+  costCenterId          String?
+  clientId              String?
+  contractId            String?
+  supplierId            String?
+  projectId             String?
+  productId             String?
+  bankAccountId         String?
+  paymentMethod         PaymentMethod?
+  paymentMethodConfigId String?
+  responsibleId         String?
+  lastGeneratedYear     Int?
+  lastGeneratedMonth    Int?
+  notes                 String?
+  createdById           String?
+  updatedById           String?
+  version               Int                   @default(1)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  deletedAt             DateTime?
 
-  category         FinancialCategory? @relation(fields: [categoryId], references: [id])
-  costCenter       CostCenter?        @relation(fields: [costCenterId], references: [id])
-  client           Client?            @relation(fields: [clientId], references: [id])
-  contract         Contract?          @relation(fields: [contractId], references: [id])
-  supplier         Supplier?          @relation(fields: [supplierId], references: [id])
-  createdBy        User?              @relation("RecurringCreatedBy", fields: [createdById], references: [id])
-  generatedEntries FinancialEntry[]
+  category            FinancialCategory?      @relation(fields: [categoryId], references: [id])
+  costCenter          CostCenter?             @relation(fields: [costCenterId], references: [id])
+  client              Client?                 @relation(fields: [clientId], references: [id])
+  contract            Contract?               @relation(fields: [contractId], references: [id])
+  supplier            Supplier?               @relation(fields: [supplierId], references: [id])
+  project             Project?                @relation(fields: [projectId], references: [id])
+  product             FinancialProduct?       @relation(fields: [productId], references: [id])
+  bankAccount         BankAccount?            @relation(fields: [bankAccountId], references: [id])
+  paymentMethodConfig PaymentMethodConfig?    @relation(fields: [paymentMethodConfigId], references: [id])
+  responsible         User?                   @relation("RecurringResponsible", fields: [responsibleId], references: [id])
+  createdBy           User?                   @relation("RecurringCreatedBy", fields: [createdById], references: [id])
+  updatedBy           User?                   @relation("RecurringUpdatedBy", fields: [updatedById], references: [id])
+  primaryEntry        FinancialEntry?         @relation("RecurringPrimaryEntry", fields: [primaryEntryId], references: [id])
+  generatedEntries    FinancialEntry[]        @relation("RecurringGeneratedEntries")
+  history             RecurringEntryHistory[]
 
   @@index([active])
+  @@index([tenantId, status])
   @@index([type])
   @@index([contractId])
+  @@index([projectId])
+  @@index([productId])
+  @@index([responsibleId])
+}
+
+/**
+ * Histórico imutável de alterações/cancelamentos de uma série recorrente.
+ */
+model RecurringEntryHistory {
+  id               String   @id @default(cuid())
+  recurringEntryId String
+  userId           String?
+  action           String
+  scope            String
+  occurrenceNumber Int?
+  reason           String?
+  before           Json?
+  after            Json?
+  createdAt        DateTime @default(now())
+
+  recurringEntry RecurringEntry @relation(fields: [recurringEntryId], references: [id], onDelete: Cascade)
+  user           User?          @relation(fields: [userId], references: [id])
+
+  @@index([recurringEntryId, createdAt])
+  @@index([userId, createdAt])
+}
+
+/**
+ * Forma de pagamento administrável. Complementa o enum legado sem quebrar
+ * lançamentos existentes.
+ */
+model PaymentMethodConfig {
+  id             String    @id @default(cuid())
+  tenantId       String    @default("default")
+  code           String
+  name           String
+  settlementDays Int       @default(0)
+  feeRate        Float     @default(0)
+  bankAccountId  String?
+  active         Boolean   @default(true)
+  notes          String?
+  createdById    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  bankAccount      BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  createdBy        User?            @relation("PaymentMethodCreatedBy", fields: [createdById], references: [id])
+  financialEntries FinancialEntry[]
+  recurringEntries RecurringEntry[]
+  contracts        Contract[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+  @@index([bankAccountId])
+}
+
+model FinancialProduct {
+  id          String               @id @default(cuid())
+  tenantId    String               @default("default")
+  code        String
+  name        String
+  type        FinancialProductType @default(SERVICO)
+  active      Boolean              @default(true)
+  notes       String?
+  createdById String?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  deletedAt   DateTime?
+
+  createdBy        User?                     @relation("FinancialProductCreatedBy", fields: [createdById], references: [id])
+  financialEntries FinancialEntry[]
+  recurringEntries RecurringEntry[]
+  projectionLines  FinancialProjectionLine[]
+  contracts        Contract[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, active])
+}
+
+model FinancialProjection {
+  id                 String                 @id @default(cuid())
+  tenantId           String                 @default("default")
+  name               String
+  description        String?
+  year               Int
+  periodStartMonth   Int                    @default(1)
+  periodEndMonth     Int                    @default(12)
+  scenarioType       ProjectionScenarioType @default(PERSONALIZADO)
+  status             ProjectionStatus       @default(RASCUNHO)
+  version            Int                    @default(1)
+  responsibleId      String?
+  createdById        String?
+  sourceProjectionId String?
+  sourceKind         String?
+  notes              String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  archivedAt         DateTime?
+
+  responsible      User?                     @relation("ProjectionResponsible", fields: [responsibleId], references: [id])
+  createdBy        User?                     @relation("ProjectionCreatedBy", fields: [createdById], references: [id])
+  sourceProjection FinancialProjection?      @relation("ProjectionCopies", fields: [sourceProjectionId], references: [id])
+  copies           FinancialProjection[]     @relation("ProjectionCopies")
+  lines            FinancialProjectionLine[]
+
+  @@unique([tenantId, name, year, version])
+  @@index([tenantId, year, status])
+  @@index([responsibleId])
+}
+
+model FinancialProjectionLine {
+  id              String             @id @default(cuid())
+  projectionId    String
+  label           String
+  type            ProjectionLineType
+  order           Int                @default(0)
+  categoryId      String?
+  costCenterId    String?
+  projectId       String?
+  productId       String?
+  clientId        String?
+  supplierId      String?
+  contractId      String?
+  automaticSource String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  projection FinancialProjection        @relation(fields: [projectionId], references: [id], onDelete: Cascade)
+  category   FinancialCategory?         @relation(fields: [categoryId], references: [id])
+  costCenter CostCenter?                @relation(fields: [costCenterId], references: [id])
+  project    Project?                   @relation(fields: [projectId], references: [id])
+  product    FinancialProduct?          @relation(fields: [productId], references: [id])
+  client     Client?                    @relation(fields: [clientId], references: [id])
+  supplier   Supplier?                  @relation(fields: [supplierId], references: [id])
+  contract   Contract?                  @relation(fields: [contractId], references: [id])
+  values     FinancialProjectionValue[]
+
+  @@index([projectionId, order])
+  @@index([categoryId])
+  @@index([costCenterId])
+}
+
+model FinancialProjectionValue {
+  id             String                @id @default(cuid())
+  lineId         String
+  month          Int
+  automaticValue Float                 @default(0)
+  manualValue    Float?
+  realizedValue  Float?
+  source         ProjectionValueSource @default(AUTOMATICO)
+  notes          String?
+  updatedById    String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  line      FinancialProjectionLine  @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  updatedBy User?                    @relation("ProjectionValueUpdatedBy", fields: [updatedById], references: [id])
+  history   ProjectionValueHistory[]
+
+  @@unique([lineId, month])
+  @@index([updatedById])
+}
+
+model ProjectionValueHistory {
+  id                String                 @id @default(cuid())
+  projectionValueId String
+  userId            String?
+  previousValue     Float?
+  newValue          Float?
+  previousSource    ProjectionValueSource?
+  newSource         ProjectionValueSource
+  reason            String?
+  createdAt         DateTime               @default(now())
+
+  projectionValue FinancialProjectionValue @relation(fields: [projectionValueId], references: [id], onDelete: Cascade)
+  user            User?                    @relation(fields: [userId], references: [id])
+
+  @@index([projectionValueId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model DreModel {
+  id             String         @id @default(cuid())
+  tenantId       String         @default("default")
+  name           String
+  description    String?
+  status         DreModelStatus @default(RASCUNHO)
+  isDefault      Boolean        @default(false)
+  currentVersion Int            @default(1)
+  createdById    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  archivedAt     DateTime?
+
+  createdBy User?             @relation("DreModelCreatedBy", fields: [createdById], references: [id])
+  versions  DreModelVersion[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, status])
+  @@index([tenantId, isDefault])
+}
+
+model DreModelVersion {
+  id            String         @id @default(cuid())
+  modelId       String
+  version       Int
+  status        DreModelStatus @default(RASCUNHO)
+  effectiveFrom DateTime?
+  publishedById String?
+  publishedAt   DateTime?
+  notes         String?
+  createdAt     DateTime       @default(now())
+
+  model       DreModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+  publishedBy User?    @relation("DreVersionPublishedBy", fields: [publishedById], references: [id])
+  rows        DreRow[]
+
+  @@unique([modelId, version])
+  @@index([status, effectiveFrom])
+}
+
+model DreRow {
+  id        String     @id @default(cuid())
+  versionId String
+  parentId  String?
+  code      String
+  name      String
+  kind      DreRowKind @default(CONTA)
+  order     Int        @default(0)
+  sign      Int        @default(1)
+  hidden    Boolean    @default(false)
+  formula   Json?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  version  DreModelVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  parent   DreRow?         @relation("DreRowHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children DreRow[]        @relation("DreRowHierarchy")
+  mappings DreRowMapping[]
+
+  @@unique([versionId, code])
+  @@index([versionId, order])
+  @@index([parentId])
+}
+
+model DreRowMapping {
+  id                 String  @id @default(cuid())
+  rowId              String
+  categoryId         String?
+  costCenterId       String?
+  includeDescendants Boolean @default(true)
+
+  row        DreRow             @relation(fields: [rowId], references: [id], onDelete: Cascade)
+  category   FinancialCategory? @relation(fields: [categoryId], references: [id])
+  costCenter CostCenter?        @relation(fields: [costCenterId], references: [id])
+
+  @@index([rowId])
+  @@index([categoryId])
+  @@index([costCenterId])
 }
 
 /**
