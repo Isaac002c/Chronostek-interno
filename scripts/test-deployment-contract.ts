@@ -69,23 +69,23 @@ assert(
   "A sessão deve suportar cookie seguro entre os subdomínios.",
 );
 
-const apiHeaders = config.headers?.find(
-  (entry) => entry.source === "/api/:path*",
+const proxyHeaders = config.headers?.find(
+  (entry) => entry.source === "/:path*",
 )?.headers;
 assert(
-  apiHeaders?.some(
+  proxyHeaders?.some(
     ({ key, value }) =>
       key?.toLowerCase() === "cache-control" &&
       value === "private, no-store, max-age=0",
   ),
-  "Rotas de API devem desabilitar cache explicitamente.",
+  "Todo o proxy deve impedir cache de HTML e APIs autenticadas.",
 );
 assert(
-  apiHeaders?.some(
+  proxyHeaders?.some(
     ({ key, value }) =>
       key?.toLowerCase() === "x-vercel-enable-rewrite-caching" && value === "0",
   ),
-  "Rewrites de API não podem habilitar cache na CDN.",
+  "O rewrite global não pode habilitar cache na CDN.",
 );
 
 const ignoreRules = readFileSync(join(root, ".vercelignore"), "utf8")
