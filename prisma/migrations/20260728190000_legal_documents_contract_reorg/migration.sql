@@ -1,16 +1,47 @@
 -- Reorganização não destrutiva: Contract passa a ser o registro oficial no
 -- Jurídico e Attachment é ampliada para o documento canônico/versionado.
 
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'RASCUNHO';
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'EM_REVISAO';
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'AGUARDANDO_ASSINATURA';
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'PROXIMO_VENCIMENTO';
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'VENCIDO';
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'RENOVADO';
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'SUSPENSO';
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'RESCINDIDO';
-ALTER TYPE "ContractStatus" ADD VALUE IF NOT EXISTS 'ARQUIVADO';
-ALTER TYPE "CalendarOrigin" ADD VALUE IF NOT EXISTS 'AUTOMACAO';
+-- O PostgreSQL não permite usar um valor acrescentado por ALTER TYPE antes
+-- do commit da transação. Como os novos estados são usados mais abaixo na
+-- migração de dados legados, os enums são substituídos atomicamente.
+ALTER TYPE "ContractStatus" RENAME TO "ContractStatus_old";
+CREATE TYPE "ContractStatus" AS ENUM (
+  'RASCUNHO',
+  'EM_REVISAO',
+  'AGUARDANDO_ASSINATURA',
+  'ATIVO',
+  'INADIMPLENTE',
+  'EM_RISCO',
+  'PROXIMO_VENCIMENTO',
+  'VENCIDO',
+  'RENOVADO',
+  'SUSPENSO',
+  'RESCINDIDO',
+  'CANCELADO',
+  'RENOVACAO_PROXIMA',
+  'ENCERRADO',
+  'ARQUIVADO'
+);
+ALTER TABLE "Contract" ALTER COLUMN "status" DROP DEFAULT;
+ALTER TABLE "Contract"
+  ALTER COLUMN "status" TYPE "ContractStatus"
+  USING ("status"::text::"ContractStatus");
+ALTER TABLE "Contract" ALTER COLUMN "status" SET DEFAULT 'ATIVO';
+DROP TYPE "ContractStatus_old";
+
+ALTER TYPE "CalendarOrigin" RENAME TO "CalendarOrigin_old";
+CREATE TYPE "CalendarOrigin" AS ENUM ('TELUN', 'GOOGLE', 'AUTOMACAO');
+ALTER TABLE "CalendarEvent" ALTER COLUMN "origin" DROP DEFAULT;
+ALTER TABLE "CalendarEvent"
+  ALTER COLUMN "origin" TYPE "CalendarOrigin"
+  USING ("origin"::text::"CalendarOrigin");
+ALTER TABLE "CalendarEvent" ALTER COLUMN "origin" SET DEFAULT 'TELUN';
+ALTER TABLE "CalendarEventHistory" ALTER COLUMN "origin" DROP DEFAULT;
+ALTER TABLE "CalendarEventHistory"
+  ALTER COLUMN "origin" TYPE "CalendarOrigin"
+  USING ("origin"::text::"CalendarOrigin");
+ALTER TABLE "CalendarEventHistory" ALTER COLUMN "origin" SET DEFAULT 'TELUN';
+DROP TYPE "CalendarOrigin_old";
 
 CREATE TYPE "DocumentStatus" AS ENUM (
   'ATIVO',
