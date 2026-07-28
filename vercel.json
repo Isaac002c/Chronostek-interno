@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "",
-  "buildCommand": "node -e \"console.log('Telun proxy-only deployment')\"",
+  "buildCommand": "node -e \"const fs=require('fs');fs.mkdirSync('vercel-proxy',{recursive:true});fs.writeFileSync('vercel-proxy/index.html','<!doctype html><meta charset=utf-8><meta name=robots content=noindex><title>Telun</title><p>Telun proxy ativo.</p>')\"",
   "outputDirectory": "vercel-proxy",
   "rewrites": [
     {

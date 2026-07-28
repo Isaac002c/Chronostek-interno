@@ -36,7 +36,7 @@ assert.equal(
 );
 assert.match(
   config.buildCommand ?? "",
-  /^node -e /,
+  /^node -e .*mkdirSync\('vercel-proxy'.*writeFileSync\('vercel-proxy\/index\.html'/,
   "O build da Vercel deve ser um comando sem dependências.",
 );
 
