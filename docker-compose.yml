@@ -32,7 +32,11 @@ services:
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD deve ser definida}
       SEED_EMAIL_DOMAIN: ${SEED_EMAIL_DOMAIN:-telun.com.br}
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
+      DOCUMENT_STORAGE_ROOT: /app/storage/uploads
+      DOCUMENT_MAX_BYTES: ${DOCUMENT_MAX_BYTES:-20971520}
       NODE_ENV: production
+    volumes:
+      - telun_uploads:/app/storage/uploads
     ports:
       - "8080:3000"
     networks:
@@ -40,6 +44,7 @@ services:
 
 volumes:
   chronostek_pgdata:
+  telun_uploads:
 
 networks:
   telun:

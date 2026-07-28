@@ -7,6 +7,7 @@ import { ProposalStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   requireWrite,
+  requireLegalPermission,
   zodFieldErrors,
   str,
   optStr,
@@ -16,6 +17,7 @@ import {
   optEnum,
   type ActionState,
 } from "@/lib/actions";
+import { writeAudit } from "@/lib/audit";
 
 const proposalSchema = z.object({
   clientId: z.string().nullable(),
@@ -97,4 +99,71 @@ export async function deleteProposal(id: string): Promise<ActionState> {
 
   revalidatePath("/dashboard/comercial/propostas");
   return { ok: true };
+}
+
+export async function generateContractFromProposal(
+  id: string,
+): Promise<ActionState> {
+  const auth = await requireLegalPermission("GENERATE_CONTRACT_FROM_PROPOSAL");
+  if ("error" in auth) return auth;
+  try {
+    const proposal = await prisma.proposal.findFirst({
+      where: { id, deletedAt: null },
+      include: { contract: { select: { id: true } } },
+    });
+    if (!proposal) return { error: "Proposta não encontrada." };
+    if (proposal.status !== "ACEITA") {
+      return { error: "Somente propostas aceitas podem gerar contrato." };
+    }
+    if (!proposal.clientId) {
+      return { error: "Vincule um cliente à proposta antes de gerar o contrato." };
+    }
+    if (proposal.contract) {
+      return { error: "Esta proposta já possui contrato no Jurídico." };
+    }
+    const contract = await prisma.contract.create({
+      data: {
+        clientId: proposal.clientId,
+        proposalId: proposal.id,
+        title: proposal.title,
+        type: "PROJETO_FECHADO",
+        totalValue: proposal.value,
+        status: "RASCUNHO",
+        startDate: proposal.expectedDate,
+        commercialResponsibleId: auth.user.id,
+        createdById: auth.user.id,
+        updatedById: auth.user.id,
+        notes: proposal.notes,
+      },
+    });
+    await writeAudit({
+      userId: auth.user.id,
+      action: "generate_contract",
+      entity: "Proposal",
+      entityId: proposal.id,
+      after: { contractId: contract.id, clientId: proposal.clientId },
+      origin: "comercial/propostas",
+    });
+    revalidatePath("/dashboard/comercial/propostas");
+    revalidatePath("/dashboard/juridico/contratos");
+    redirect(`/dashboard/juridico/contratos/${contract.id}/edit`);
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "digest" in error &&
+      String(error.digest).startsWith("NEXT_REDIRECT")
+    ) {
+      throw error;
+    }
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "P2002"
+    ) {
+      return { error: "Esta proposta já possui contrato no Jurídico." };
+    }
+    return { error: "Não foi possível gerar o contrato." };
+  }
 }

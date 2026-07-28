@@ -49,6 +49,15 @@ export type ContractDefaults = {
   financialProductId?: string | null;
   paymentMethodConfigId?: string | null;
   financialResponsibleId?: string | null;
+  contractNumber?: string | null;
+  legalResponsibleId?: string | null;
+  commercialResponsibleId?: string | null;
+  signedAt?: string;
+  autoRenewal?: boolean;
+  renewalNoticeDays?: number | null;
+  billingMethod?: string | null;
+  relevantClauses?: string | null;
+  signatories?: string | null;
   notes?: string | null;
 };
 
@@ -79,7 +88,7 @@ export function ContractForm({
   }, [state]);
   const fe = state.fieldErrors ?? {};
 
-  const [type, setType] = useState(defaults.type ?? "RECORRENTE");
+  const [type, setType] = useState(defaults.type ?? "PROJETO_FECHADO");
   const [monthly, setMonthly] = useState(defaults.monthlyValue != null ? String(defaults.monthlyValue) : "");
   const [startDate, setStartDate] = useState(defaults.startDate ?? "");
   const [endDate, setEndDate] = useState(defaults.endDate ?? "");
@@ -94,6 +103,9 @@ export function ContractForm({
       <FormGrid>
         <Field label="Título" htmlFor="title" required error={fe.title} className="sm:col-span-2">
           <Input id="title" name="title" defaultValue={defaults.title} required />
+        </Field>
+        <Field label="Número / identificador" htmlFor="contractNumber" error={fe.contractNumber}>
+          <Input id="contractNumber" name="contractNumber" defaultValue={defaults.contractNumber ?? ""} placeholder="Ex.: CTR-2026-001" />
         </Field>
         <Field label="Cliente" htmlFor="clientId" required error={fe.clientId}>
           <Select id="clientId" name="clientId" defaultValue={defaults.clientId ?? ""} placeholder="Selecione o cliente" options={clients} />
@@ -113,6 +125,30 @@ export function ContractForm({
         <Field label="Fim" htmlFor="endDate" error={fe.endDate}>
           <Input id="endDate" name="endDate" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </Field>
+        <Field label="Data de assinatura" htmlFor="signedAt" error={fe.signedAt}>
+          <Input id="signedAt" name="signedAt" type="date" defaultValue={defaults.signedAt ?? ""} />
+        </Field>
+        <Field label="Responsável jurídico" htmlFor="legalResponsibleId" error={fe.legalResponsibleId}>
+          <Select id="legalResponsibleId" name="legalResponsibleId" defaultValue={defaults.legalResponsibleId ?? ""} placeholder="—" options={users} />
+        </Field>
+        <Field label="Responsável comercial" htmlFor="commercialResponsibleId" error={fe.commercialResponsibleId}>
+          <Select id="commercialResponsibleId" name="commercialResponsibleId" defaultValue={defaults.commercialResponsibleId ?? ""} placeholder="—" options={users} />
+        </Field>
+        <Field label="Forma de cobrança" htmlFor="billingMethod" error={fe.billingMethod}>
+          <Input id="billingMethod" name="billingMethod" defaultValue={defaults.billingMethod ?? ""} placeholder="Ex.: mensal via boleto" />
+        </Field>
+        <Field label="Aviso de renovação (dias)" htmlFor="renewalNoticeDays" error={fe.renewalNoticeDays}>
+          <Input id="renewalNoticeDays" name="renewalNoticeDays" type="number" min="0" max="3650" defaultValue={defaults.renewalNoticeDays ?? ""} />
+        </Field>
+        <label className="flex items-center gap-2 rounded-md border px-3 py-2.5 sm:col-span-2">
+          <input
+            name="autoRenewal"
+            type="checkbox"
+            defaultChecked={defaults.autoRenewal}
+            className="size-4 rounded border-input accent-primary"
+          />
+          <span className="text-sm font-medium">Renovação automática prevista</span>
+        </label>
 
         {isRecurring && (
           <div className="space-y-4 sm:col-span-2">
@@ -237,7 +273,7 @@ export function ContractForm({
           </div>
         )}
         <Field label="Status" htmlFor="status" required error={fe.status}>
-          <Select id="status" name="status" defaultValue={defaults.status ?? "ATIVO"} options={CONTRACT_STATUS_OPTIONS} />
+          <Select id="status" name="status" defaultValue={defaults.status ?? "RASCUNHO"} options={CONTRACT_STATUS_OPTIONS} />
         </Field>
         <Field label="Centro de custo" htmlFor="costCenterId" error={fe.costCenterId}>
           <Select id="costCenterId" name="costCenterId" defaultValue={defaults.costCenterId ?? ""} placeholder="—" options={costCenters} />
@@ -248,6 +284,12 @@ export function ContractForm({
         <Field label="Observações" htmlFor="notes" className="sm:col-span-2">
           <Textarea id="notes" name="notes" defaultValue={defaults.notes ?? ""} />
         </Field>
+        <Field label="Cláusulas relevantes" htmlFor="relevantClauses" className="sm:col-span-2">
+          <Textarea id="relevantClauses" name="relevantClauses" defaultValue={defaults.relevantClauses ?? ""} />
+        </Field>
+        <Field label="Signatários" htmlFor="signatories" className="sm:col-span-2" hint="Um nome por linha.">
+          <Textarea id="signatories" name="signatories" defaultValue={defaults.signatories ?? ""} />
+        </Field>
       </FormGrid>
 
       <div className="flex items-center gap-2">
@@ -256,7 +298,7 @@ export function ContractForm({
           {submitLabel}
         </SubmitButton>
         <Button asChild variant="ghost">
-          <Link href="/dashboard/comercial/contratos">Cancelar</Link>
+          <Link href="/dashboard/juridico/contratos">Cancelar</Link>
         </Button>
       </div>
     </form>

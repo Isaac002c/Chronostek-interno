@@ -91,7 +91,7 @@ export default async function ContratosRecorrenciasPage() {
       <Card className="p-0">
         <div className="flex items-center justify-between border-b p-4">
           <h3 className="text-sm font-semibold">Contratos ativos</h3>
-          <Link href="/dashboard/comercial/contratos" className="text-xs text-primary hover:underline">
+          <Link href="/dashboard/juridico/contratos" className="text-xs text-primary hover:underline">
             Gerenciar no Comercial →
           </Link>
         </div>

@@ -134,7 +134,6 @@ export const MODULE_TABS: Record<string, NavTab[]> = {
     { label: "Leads / CRM", href: "/dashboard/leads", module: "LEADS" },
     { label: "Clientes", href: "/dashboard/comercial/clientes", module: "COMERCIAL" },
     { label: "Propostas", href: "/dashboard/comercial/propostas", module: "COMERCIAL" },
-    { label: "Contratos", href: "/dashboard/comercial/contratos", module: "COMERCIAL" },
   ],
   // As 12 visões internas do Financeiro.
   financeiro: [
@@ -158,7 +157,10 @@ export const MODULE_TABS: Record<string, NavTab[]> = {
   ],
   juridico: [
     { label: "Visão Geral", href: "/dashboard/juridico", module: "JURIDICO" },
+    { label: "Contratos", href: "/dashboard/juridico/contratos", module: "JURIDICO" },
     { label: "Documentos", href: "/dashboard/juridico/documentos", module: "JURIDICO" },
+    { label: "Renovações", href: "/dashboard/juridico/renovacoes", module: "JURIDICO" },
+    { label: "Prazos e Vencimentos", href: "/dashboard/juridico/prazos", module: "JURIDICO" },
     { label: "Demandas", href: "/dashboard/juridico/demandas", module: "JURIDICO" },
     { label: "Riscos", href: "/dashboard/juridico/riscos", module: "JURIDICO" },
   ],

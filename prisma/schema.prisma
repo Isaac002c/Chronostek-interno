@@ -115,12 +115,21 @@ enum ContractType {
 }
 
 enum ContractStatus {
+  RASCUNHO
+  EM_REVISAO
+  AGUARDANDO_ASSINATURA
   ATIVO
   INADIMPLENTE
   EM_RISCO
+  PROXIMO_VENCIMENTO
+  VENCIDO
+  RENOVADO
+  SUSPENSO
+  RESCINDIDO
   CANCELADO
   RENOVACAO_PROXIMA
   ENCERRADO
+  ARQUIVADO
 }
 
 enum FinancialType {
@@ -392,6 +401,31 @@ enum LegalDocumentStatus {
   ARQUIVADO
 }
 
+enum DocumentStatus {
+  ATIVO
+  AGUARDANDO_ASSINATURA
+  ASSINADO
+  VENCIDO
+  ARQUIVADO
+}
+
+enum DocumentPrivacy {
+  INTERNO
+  PRIVADO
+  CONFIDENCIAL
+}
+
+enum DocumentVersionStatus {
+  ATUAL
+  ARQUIVADA
+}
+
+enum DocumentAlertStatus {
+  PENDENTE
+  CONCLUIDO
+  IGNORADO
+}
+
 enum LegalDemandType {
   REVISAO_CONTRATO
   QUESTAO_CLIENTE
@@ -617,6 +651,7 @@ enum CalendarPriority {
 enum CalendarOrigin {
   TELUN
   GOOGLE
+  AUTOMACAO
 }
 
 enum CalendarParticipantKind {
@@ -751,9 +786,19 @@ model User {
   paymentMethodsCreated     PaymentMethodConfig[]      @relation("PaymentMethodCreatedBy")
   financialProductsCreated  FinancialProduct[]         @relation("FinancialProductCreatedBy")
   contractsFinancialOwned   Contract[]                 @relation("ContractFinancialResponsible")
+  contractsLegalOwned       Contract[]                 @relation("ContractLegalResponsible")
+  contractsCommercialOwned  Contract[]                 @relation("ContractCommercialResponsible")
+  contractsCreated          Contract[]                 @relation("ContractCreatedBy")
+  contractsUpdated          Contract[]                 @relation("ContractUpdatedBy")
   closingsClosed            MonthlyClosing[]           @relation("ClosingClosedBy")
   closingsReopened          MonthlyClosing[]           @relation("ClosingReopenedBy")
-  attachmentsUploaded       Attachment[]               @relation("AttachmentUploadedBy")
+  documentsUploaded         Document[]                 @relation("DocumentUploadedBy")
+  documentsUpdated          Document[]                 @relation("DocumentUpdatedBy")
+  documentsResponsible      Document[]                 @relation("DocumentResponsible")
+  documentVersionsUploaded  DocumentVersion[]          @relation("DocumentVersionUploadedBy")
+  documentTypesCreated      DocumentType[]             @relation("DocumentTypeCreatedBy")
+  documentCategoriesCreated DocumentCategory[]         @relation("DocumentCategoryCreatedBy")
+  documentTagsCreated       DocumentTag[]              @relation("DocumentTagCreatedBy")
   reconciliations           Reconciliation[]           @relation("ReconciledBy")
   orgSettingsUpdated        OrganizationSettings[]     @relation("OrgSettingsUpdatedBy")
   calendarEventsCreated     CalendarEvent[]            @relation("CalendarEventCreatedBy")
@@ -1023,6 +1068,7 @@ model Proposal {
 
   client     Client?     @relation(fields: [clientId], references: [id])
   costCenter CostCenter? @relation(fields: [costCenterId], references: [id])
+  contract   Contract?
 
   @@index([status])
   @@index([clientId])
@@ -1050,22 +1096,46 @@ model Contract {
   financialProductId      String?
   paymentMethodConfigId   String?
   financialResponsibleId  String?
+  contractNumber          String?
+  proposalId              String?             @unique
+  legacyLegalContractId   String?             @unique
+  legalResponsibleId      String?
+  commercialResponsibleId String?
+  signedAt                DateTime?
+  autoRenewal             Boolean             @default(false)
+  renewalNoticeDays       Int?
+  billingMethod           String?
+  relevantClauses         String?
+  signatories             String?
+  archivedAt              DateTime?
+  previousContractId      String?
+  createdById             String?
+  updatedById             String?
   notes                   String?
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
   deletedAt               DateTime?
 
-  client               Client                    @relation(fields: [clientId], references: [id])
-  costCenter           CostCenter?               @relation(fields: [costCenterId], references: [id])
-  category             FinancialCategory?        @relation(fields: [categoryId], references: [id])
-  financialProduct     FinancialProduct?         @relation(fields: [financialProductId], references: [id])
-  paymentMethodConfig  PaymentMethodConfig?      @relation(fields: [paymentMethodConfigId], references: [id])
-  financialResponsible User?                     @relation("ContractFinancialResponsible", fields: [financialResponsibleId], references: [id])
-  financialEntries     FinancialEntry[]
-  projects             Project[]
-  recurringEntries     RecurringEntry[]
-  projectionLines      FinancialProjectionLine[]
-  tasks                Task[]                    @relation("ContractTasks")
+  client                Client                    @relation(fields: [clientId], references: [id])
+  costCenter            CostCenter?               @relation(fields: [costCenterId], references: [id])
+  category              FinancialCategory?        @relation(fields: [categoryId], references: [id])
+  financialProduct      FinancialProduct?         @relation(fields: [financialProductId], references: [id])
+  paymentMethodConfig   PaymentMethodConfig?      @relation(fields: [paymentMethodConfigId], references: [id])
+  financialResponsible  User?                     @relation("ContractFinancialResponsible", fields: [financialResponsibleId], references: [id])
+  proposal              Proposal?                 @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  legalResponsible      User?                     @relation("ContractLegalResponsible", fields: [legalResponsibleId], references: [id], onDelete: SetNull)
+  commercialResponsible User?                     @relation("ContractCommercialResponsible", fields: [commercialResponsibleId], references: [id], onDelete: SetNull)
+  createdBy             User?                     @relation("ContractCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy             User?                     @relation("ContractUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  previousContract      Contract?                 @relation("ContractRenewalChain", fields: [previousContractId], references: [id], onDelete: SetNull)
+  renewals              Contract[]                @relation("ContractRenewalChain")
+  legalDeadlines        LegalDeadline[]           @relation("OfficialContractDeadlines")
+  legalDemands          LegalDemand[]             @relation("OfficialContractDemands")
+  financialEntries      FinancialEntry[]
+  projects              Project[]
+  recurringEntries      RecurringEntry[]
+  projectionLines       FinancialProjectionLine[]
+  tasks                 Task[]                    @relation("ContractTasks")
 
   @@index([status])
   @@index([type])
@@ -1073,6 +1143,11 @@ model Contract {
   @@index([financialProductId])
   @@index([paymentMethodConfigId])
   @@index([financialResponsibleId])
+  @@index([contractNumber])
+  @@index([legalResponsibleId])
+  @@index([commercialResponsibleId])
+  @@index([previousContractId])
+  @@index([endDate])
 }
 
 // ─────────────────────────────── FINANCEIRO ───────────────────────────────
@@ -1280,6 +1355,7 @@ model LegalDeadline {
   title           String
   description     String?
   legalContractId String?
+  contractId      String?
   legalDemandId   String?
   date            DateTime
   priority        Priority            @default(MEDIA)
@@ -1292,12 +1368,14 @@ model LegalDeadline {
   updatedAt       DateTime            @updatedAt
 
   legalContract LegalContract? @relation(fields: [legalContractId], references: [id])
+  contract      Contract?      @relation("OfficialContractDeadlines", fields: [contractId], references: [id], onDelete: SetNull)
   legalDemand   LegalDemand?   @relation(fields: [legalDemandId], references: [id])
   responsible   User?          @relation("DeadlineResponsible", fields: [responsibleId], references: [id])
   costCenter    CostCenter?    @relation(fields: [costCenterId], references: [id])
 
   @@index([status])
   @@index([date])
+  @@index([contractId])
 }
 
 model LegalDocument {
@@ -1335,6 +1413,7 @@ model LegalDemand {
   priority        Priority          @default(MEDIA)
   clientId        String?
   legalContractId String?
+  contractId      String?
   responsibleId   String?
   costCenterId    String?
   openedAt        DateTime          @default(now())
@@ -1346,12 +1425,14 @@ model LegalDemand {
 
   client        Client?         @relation(fields: [clientId], references: [id])
   legalContract LegalContract?  @relation("ContractDemands", fields: [legalContractId], references: [id])
+  contract      Contract?       @relation("OfficialContractDemands", fields: [contractId], references: [id], onDelete: SetNull)
   responsible   User?           @relation("LegalDemandResponsible", fields: [responsibleId], references: [id])
   costCenter    CostCenter?     @relation(fields: [costCenterId], references: [id])
   deadlines     LegalDeadline[]
 
   @@index([status])
   @@index([type])
+  @@index([contractId])
 }
 
 model LegalRisk {
@@ -1592,6 +1673,9 @@ model CalendarEvent {
   recurrenceInstanceKey String?
   originalStartAt       DateTime?
   parentEventId         String?
+  sourceEntityType      String?
+  sourceEntityId        String?
+  sourceKey             String?
   syncPending           Boolean             @default(false)
   sourceVersion         Int                 @default(1)
   cancelledAt           DateTime?
@@ -1618,6 +1702,7 @@ model CalendarEvent {
   history          CalendarEventHistory[]
 
   @@unique([tenantId, recurrenceInstanceKey])
+  @@unique([tenantId, sourceKey])
   @@index([tenantId, startAt, endAt])
   @@index([type])
   @@index([status])
@@ -1631,6 +1716,7 @@ model CalendarEvent {
   @@index([responsibleId])
   @@index([recurrenceId])
   @@index([parentEventId])
+  @@index([sourceEntityType, sourceEntityId])
   @@index([deletedAt])
 }
 
@@ -2399,22 +2485,184 @@ model MonthlyClosing {
 }
 
 /**
- * Anexo/comprovante polimórfico (metadados; o arquivo fica em storage externo).
+ * Documento canônico do Telun. Mantém o mapeamento para a tabela histórica
+ * Attachment para preservar anexos existentes sem criar um cadastro paralelo.
+ * `fileUrl` guarda somente uma chave opaca no storage privado.
  */
-model Attachment {
-  id           String   @id @default(cuid())
-  entityType   String
-  entityId     String
-  fileName     String
-  fileUrl      String
-  mimeType     String?
-  size         Int?
-  uploadedById String?
-  createdAt    DateTime @default(now())
+model Document {
+  id             String          @id @default(cuid())
+  tenantId       String          @default("default")
+  entityType     String
+  entityId       String
+  fileName       String
+  fileUrl        String
+  originalName   String          @default("")
+  extension      String          @default("")
+  sha256         String          @default("")
+  mimeType       String?
+  size           Int?
+  externalUrl    String?
+  description    String?
+  documentTypeId String?
+  categoryId     String?
+  status         DocumentStatus  @default(ATIVO)
+  privacy        DocumentPrivacy @default(INTERNO)
+  documentDate   DateTime?
+  validFrom      DateTime?
+  expirationDate DateTime?
+  responsibleId  String?
+  uploadedById   String?
+  updatedById    String?
+  currentVersion Int             @default(1)
+  archivedAt     DateTime?
+  deletedAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
-  uploadedBy User? @relation("AttachmentUploadedBy", fields: [uploadedById], references: [id])
+  documentType DocumentType?             @relation(fields: [documentTypeId], references: [id], onDelete: SetNull)
+  category     DocumentCategory?         @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  responsible  User?                     @relation("DocumentResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  uploadedBy   User?                     @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  updatedBy    User?                     @relation("DocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  versions     DocumentVersion[]
+  links        DocumentLink[]
+  tags         DocumentTagLink[]
+  alerts       DocumentExpirationAlert[]
 
+  @@index([tenantId, deletedAt, createdAt])
   @@index([entityType, entityId])
+  @@index([documentTypeId])
+  @@index([categoryId])
+  @@index([responsibleId])
+  @@index([status])
+  @@index([privacy])
+  @@index([expirationDate])
+  @@map("Attachment")
+}
+
+model DocumentVersion {
+  id           String                @id @default(cuid())
+  documentId   String
+  version      Int
+  fileUrl      String
+  originalName String
+  extension    String
+  mimeType     String
+  size         Int
+  sha256       String
+  uploadedById String?
+  note         String?
+  reason       String?
+  status       DocumentVersionStatus @default(ATUAL)
+  createdAt    DateTime              @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy User?    @relation("DocumentVersionUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@unique([documentId, version])
+  @@index([sha256])
+  @@index([uploadedById])
+}
+
+model DocumentType {
+  id                 String   @id @default(cuid())
+  tenantId           String   @default("default")
+  name               String
+  slug               String
+  description        String?
+  color              String?
+  icon               String?
+  requiresExpiration Boolean  @default(false)
+  requiresContract   Boolean  @default(false)
+  requiresSignature  Boolean  @default(false)
+  requiredFields     Json?
+  active             Boolean  @default(true)
+  createdById        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  createdBy User?      @relation("DocumentTypeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  documents Document[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, active])
+}
+
+model DocumentCategory {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("default")
+  name        String
+  slug        String
+  description String?
+  color       String?
+  active      Boolean  @default(true)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User?      @relation("DocumentCategoryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  documents Document[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId, active])
+}
+
+model DocumentTag {
+  id             String   @id @default(cuid())
+  tenantId       String   @default("default")
+  name           String
+  normalizedName String
+  color          String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+
+  createdBy User?             @relation("DocumentTagCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  documents DocumentTagLink[]
+
+  @@unique([tenantId, normalizedName])
+  @@index([tenantId, name])
+}
+
+model DocumentTagLink {
+  documentId String
+  tagId      String
+  createdAt  DateTime @default(now())
+
+  document Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tag      DocumentTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([documentId, tagId])
+  @@index([tagId])
+}
+
+model DocumentLink {
+  id         String   @id @default(cuid())
+  documentId String
+  entityType String
+  entityId   String
+  createdAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, entityType, entityId])
+  @@index([entityType, entityId])
+}
+
+model DocumentExpirationAlert {
+  id              String              @id @default(cuid())
+  documentId      String
+  daysBefore      Int
+  alertDate       DateTime
+  status          DocumentAlertStatus @default(PENDENTE)
+  sourceKey       String              @unique
+  calendarEventId String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, daysBefore])
+  @@index([alertDate, status])
 }
 
 /**

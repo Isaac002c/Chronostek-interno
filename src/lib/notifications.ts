@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/rbac";
+import { canAccessModule, isAdmin } from "@/lib/rbac";
+import {
+  canLegal,
+  visibleDocumentWhere,
+} from "@/lib/legal-permissions";
 import type { Role } from "@prisma/client";
 
 export type NotificationItem = {
@@ -70,6 +74,67 @@ export async function getUserNotifications(user: {
             : "/dashboard/financeiro/contas-pagar",
         kind: "overdue",
         date: e.dueDate,
+      });
+    }
+  }
+
+  if (
+    canAccessModule(user.role, "JURIDICO") &&
+    canLegal(user.role, "VIEW_CONTRACTS")
+  ) {
+    const expiringContracts = await prisma.contract.findMany({
+      where: {
+        deletedAt: null,
+        status: {
+          notIn: ["CANCELADO", "RESCINDIDO", "ENCERRADO", "ARQUIVADO"],
+        },
+        endDate: { not: null, lte: soon },
+      },
+      orderBy: { endDate: "asc" },
+      take: 4,
+      select: { id: true, title: true, endDate: true },
+    });
+    for (const contract of expiringContracts) {
+      items.push({
+        id: `contract-expiration-${contract.id}`,
+        title: `Contrato ${contract.endDate && contract.endDate < now ? "vencido" : "próximo do vencimento"}: ${contract.title}`,
+        href: `/dashboard/juridico/contratos/${contract.id}/edit`,
+        kind:
+          contract.endDate && contract.endDate < now ? "overdue" : "soon",
+        date: contract.endDate,
+      });
+    }
+  }
+
+  if (
+    canAccessModule(user.role, "JURIDICO") &&
+    canLegal(user.role, "VIEW_DOCUMENTS")
+  ) {
+    const expiringDocuments = await prisma.document.findMany({
+      where: {
+        ...visibleDocumentWhere(user.role, user.id),
+        expirationDate: { not: null, lte: soon },
+      },
+      orderBy: { expirationDate: "asc" },
+      take: 4,
+      select: {
+        id: true,
+        fileName: true,
+        privacy: true,
+        expirationDate: true,
+      },
+    });
+    for (const document of expiringDocuments) {
+      const confidential = document.privacy === "CONFIDENCIAL";
+      items.push({
+        id: `document-expiration-${document.id}`,
+        title: `${document.expirationDate && document.expirationDate < now ? "Documento vencido" : "Documento próximo da validade"}: ${confidential ? "documento confidencial" : document.fileName}`,
+        href: `/dashboard/juridico/documentos/${document.id}`,
+        kind:
+          document.expirationDate && document.expirationDate < now
+            ? "overdue"
+            : "soon",
+        date: document.expirationDate,
       });
     }
   }

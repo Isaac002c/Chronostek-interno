@@ -5,6 +5,10 @@ import {
   canFinance,
   type FinancePermission,
 } from "@/lib/finance-permissions";
+import {
+  canLegal,
+  type LegalPermission,
+} from "@/lib/legal-permissions";
 
 export type { ActionState } from "@/lib/action-state";
 
@@ -29,6 +33,18 @@ export async function requireFinancePermission(
   if (!user) return { error: "Sessão expirada. Faça login novamente." };
   if (!canFinance(user.role, permission)) {
     return { error: "Você não tem permissão para esta ação financeira." };
+  }
+  return { user };
+}
+
+/** Garante capacidade jurídica/documental específica no backend. */
+export async function requireLegalPermission(
+  permission: LegalPermission,
+): Promise<{ user: SessionUser } | { error: string }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Sessão expirada. Faça login novamente." };
+  if (!canLegal(user.role, permission)) {
+    return { error: "Você não tem permissão para esta ação jurídica." };
   }
   return { user };
 }

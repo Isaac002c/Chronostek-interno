@@ -135,21 +135,39 @@ export const CONTRACT_TYPE_LABELS: Record<string, string> = {
 };
 
 export const CONTRACT_STATUS_LABELS: Record<string, string> = {
+  RASCUNHO: "Rascunho",
+  EM_REVISAO: "Em revisão",
+  AGUARDANDO_ASSINATURA: "Aguardando assinatura",
   ATIVO: "Ativo",
   INADIMPLENTE: "Inadimplente",
   EM_RISCO: "Em Risco",
+  PROXIMO_VENCIMENTO: "Próximo do vencimento",
+  VENCIDO: "Vencido",
+  RENOVADO: "Renovado",
+  SUSPENSO: "Suspenso",
+  RESCINDIDO: "Rescindido",
   CANCELADO: "Cancelado",
   RENOVACAO_PROXIMA: "Renovação Próxima",
   ENCERRADO: "Encerrado",
+  ARQUIVADO: "Arquivado",
 };
 
 export const CONTRACT_STATUS_TONE: Record<string, BadgeTone> = {
+  RASCUNHO: "neutral",
+  EM_REVISAO: "info",
+  AGUARDANDO_ASSINATURA: "warning",
   ATIVO: "success",
   INADIMPLENTE: "danger",
   EM_RISCO: "warning",
+  PROXIMO_VENCIMENTO: "warning",
+  VENCIDO: "danger",
+  RENOVADO: "info",
+  SUSPENSO: "warning",
+  RESCINDIDO: "danger",
   CANCELADO: "neutral",
   RENOVACAO_PROXIMA: "info",
   ENCERRADO: "neutral",
+  ARQUIVADO: "neutral",
 };
 
 // ───────────────────────── Financeiro ─────────────────────────

@@ -52,6 +52,8 @@ type CalendarItem = {
   endAt: string;
   allDay: boolean;
   editable: boolean;
+  automatic?: boolean;
+  href?: string;
   type?: string;
   status?: string;
   priority?: string;
@@ -271,6 +273,10 @@ export function CalendarClient() {
 
   function openItem(item: CalendarItem) {
     if (!item.editable) {
+      if (item.href) {
+        window.location.assign(item.href);
+        return;
+      }
       toast.info("Este item vem de outro módulo e deve ser editado na origem.");
       return;
     }
@@ -731,6 +737,7 @@ function MonthView({
                     )}
                   >
                     {!event.allDay && format(new Date(event.startAt), "HH:mm ")}
+                    {event.automatic && "Automático · "}
                     {event.title}
                   </button>
                 ))}
@@ -790,7 +797,10 @@ function AgendaView({
                     SOURCE_STYLE[event.source],
                   )}
                 >
-                  <span className="block font-semibold">{event.title}</span>
+                  <span className="block font-semibold">
+                    {event.automatic && "Automático · "}
+                    {event.title}
+                  </span>
                   <span>{event.allDay ? "Dia inteiro" : format(new Date(event.startAt), "HH:mm")}</span>
                 </button>
               ))}

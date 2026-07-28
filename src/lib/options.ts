@@ -41,18 +41,22 @@ export async function getCategoryOptions(type?: CategoryType): Promise<Option[]>
   return rows.map((r) => ({ value: r.id, label: `${r.code} · ${r.name}` }));
 }
 
-export async function getProjectOptions(): Promise<Option[]> {
+export async function getProjectOptions(clientId?: string): Promise<Option[]> {
   const rows = await prisma.project.findMany({
-    where: { deletedAt: null },
+    where: { deletedAt: null, ...(clientId ? { clientId } : {}) },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
   return rows.map((r) => ({ value: r.id, label: r.name }));
 }
 
-export async function getContractOptions(): Promise<Option[]> {
+export async function getContractOptions(clientId?: string): Promise<Option[]> {
   const rows = await prisma.contract.findMany({
-    where: { deletedAt: null },
+    where: {
+      deletedAt: null,
+      status: { not: "ARQUIVADO" },
+      ...(clientId ? { clientId } : {}),
+    },
     select: { id: true, title: true, client: { select: { name: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -60,6 +64,43 @@ export async function getContractOptions(): Promise<Option[]> {
     value: r.id,
     label: `${r.title} — ${r.client.name}`,
   }));
+}
+
+export async function getProposalOptions(clientId?: string): Promise<Option[]> {
+  const rows = await prisma.proposal.findMany({
+    where: { deletedAt: null, ...(clientId ? { clientId } : {}) },
+    select: { id: true, title: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((row) => ({ value: row.id, label: row.title }));
+}
+
+export type DocumentTypeOption = Option & {
+  requiresExpiration: boolean;
+  requiresContract: boolean;
+  requiresSignature: boolean;
+};
+
+export async function getDocumentTypeOptions(): Promise<DocumentTypeOption[]> {
+  const rows = await prisma.documentType.findMany({
+    where: { tenantId: "default", active: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((row) => ({
+    value: row.id,
+    label: row.name,
+    requiresExpiration: row.requiresExpiration,
+    requiresContract: row.requiresContract,
+    requiresSignature: row.requiresSignature,
+  }));
+}
+
+export async function getDocumentCategoryOptions(): Promise<Option[]> {
+  const rows = await prisma.documentCategory.findMany({
+    where: { tenantId: "default", active: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((row) => ({ value: row.id, label: row.name }));
 }
 
 export async function getSupplierOptions(): Promise<Option[]> {
@@ -186,10 +227,5 @@ export async function getGoalIndicatorOptions(): Promise<Option[]> {
 }
 
 export async function getLegalContractOptions(): Promise<Option[]> {
-  const rows = await prisma.legalContract.findMany({
-    where: { deletedAt: null },
-    select: { id: true, title: true },
-    orderBy: { createdAt: "desc" },
-  });
-  return rows.map((r) => ({ value: r.id, label: r.title }));
+  return getContractOptions();
 }

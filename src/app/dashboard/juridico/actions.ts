@@ -2,16 +2,13 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import {
-  LegalContractType,
-  LegalContractStatus,
   LegalDeadlineStatus,
   Priority,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
-  requireWrite,
+  requireLegalPermission,
   zodFieldErrors,
   str,
   optStr,
@@ -19,164 +16,168 @@ import {
   optEnum,
   type ActionState,
 } from "@/lib/actions";
-
-// ───────────────────────── Contratos jurídicos ─────────────────────────
-
-const legalSchema = z.object({
-  title: z.string().min(1, "Informe o título."),
-  counterpartyName: z.string().nullable(),
-  clientId: z.string().nullable(),
-  type: z.nativeEnum(LegalContractType),
-  status: z.nativeEnum(LegalContractStatus),
-  signatureDate: z.date().nullable(),
-  expirationDate: z.date().nullable(),
-  responsibleId: z.string().nullable(),
-  fileUrl: z.string().nullable(),
-  notes: z.string().nullable(),
-});
-
-function parseLegal(fd: FormData) {
-  return {
-    title: str(fd, "title"),
-    counterpartyName: optStr(fd, "counterpartyName"),
-    clientId: optStr(fd, "clientId"),
-    type: (optEnum(fd, "type") ?? "OUTRO") as LegalContractType,
-    status: (optEnum(fd, "status") ?? "RASCUNHO") as LegalContractStatus,
-    signatureDate: optDate(fd, "signatureDate"),
-    expirationDate: optDate(fd, "expirationDate"),
-    responsibleId: optStr(fd, "responsibleId"),
-    fileUrl: optStr(fd, "fileUrl"),
-    notes: optStr(fd, "notes"),
-  };
-}
-
-export async function createLegalContract(
-  _prev: ActionState,
-  fd: FormData,
-): Promise<ActionState> {
-  const auth = await requireWrite("JURIDICO");
-  if ("error" in auth) return auth;
-
-  const parsed = legalSchema.safeParse(parseLegal(fd));
-  if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
-
-  try {
-    await prisma.legalContract.create({ data: parsed.data });
-  } catch {
-    return { error: "Não foi possível salvar o contrato jurídico." };
-  }
-
-  revalidatePath("/dashboard/juridico");
-  redirect("/dashboard/juridico");
-}
-
-export async function updateLegalContract(
-  id: string,
-  _prev: ActionState,
-  fd: FormData,
-): Promise<ActionState> {
-  const auth = await requireWrite("JURIDICO");
-  if ("error" in auth) return auth;
-
-  const parsed = legalSchema.safeParse(parseLegal(fd));
-  if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
-
-  try {
-    await prisma.legalContract.update({ where: { id }, data: parsed.data });
-  } catch {
-    return { error: "Não foi possível atualizar o contrato jurídico." };
-  }
-
-  revalidatePath("/dashboard/juridico");
-  redirect("/dashboard/juridico");
-}
-
-export async function deleteLegalContract(id: string): Promise<ActionState> {
-  const auth = await requireWrite("JURIDICO");
-  if ("error" in auth) return auth;
-
-  try {
-    await prisma.legalContract.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
-  } catch {
-    return { error: "Não foi possível excluir o contrato jurídico." };
-  }
-
-  revalidatePath("/dashboard/juridico");
-  return { ok: true };
-}
-
-// ───────────────────────── Prazos jurídicos ─────────────────────────
+import { writeAudit } from "@/lib/audit";
 
 const deadlineSchema = z.object({
   title: z.string().min(1, "Informe o título do prazo."),
-  legalContractId: z.string().nullable(),
+  contractId: z.string().nullable(),
   date: z.date({ message: "Informe a data." }),
   priority: z.nativeEnum(Priority),
   status: z.nativeEnum(LegalDeadlineStatus),
   responsibleId: z.string().nullable(),
 });
 
-function parseDeadline(fd: FormData) {
+function parseDeadline(formData: FormData) {
   return {
-    title: str(fd, "title"),
-    legalContractId: optStr(fd, "legalContractId"),
-    date: optDate(fd, "date"),
-    priority: (optEnum(fd, "priority") ?? "MEDIA") as Priority,
-    status: (optEnum(fd, "status") ?? "PENDENTE") as LegalDeadlineStatus,
-    responsibleId: optStr(fd, "responsibleId"),
+    title: str(formData, "title"),
+    contractId: optStr(formData, "contractId"),
+    date: optDate(formData, "date"),
+    priority: (optEnum(formData, "priority") ?? "MEDIA") as Priority,
+    status: (optEnum(formData, "status") ??
+      "PENDENTE") as LegalDeadlineStatus,
+    responsibleId: optStr(formData, "responsibleId"),
   };
 }
 
+function revalidateLegal() {
+  revalidatePath("/dashboard/juridico");
+  revalidatePath("/dashboard/juridico/prazos");
+  revalidatePath("/dashboard/calendario");
+}
+
 export async function createDeadline(
-  _prev: ActionState,
-  fd: FormData,
+  _previous: ActionState,
+  formData: FormData,
 ): Promise<ActionState> {
-  const auth = await requireWrite("JURIDICO");
+  const auth = await requireLegalPermission("EDIT_CONTRACT");
   if ("error" in auth) return auth;
-
-  const parsed = deadlineSchema.safeParse(parseDeadline(fd));
+  const parsed = deadlineSchema.safeParse(parseDeadline(formData));
   if (!parsed.success) return { fieldErrors: zodFieldErrors(parsed.error) };
-
   try {
-    await prisma.legalDeadline.create({ data: parsed.data });
+    if (parsed.data.contractId) {
+      const contract = await prisma.contract.count({
+        where: { id: parsed.data.contractId, deletedAt: null },
+      });
+      if (!contract) return { error: "Contrato não encontrado." };
+    }
+    const deadline = await prisma.legalDeadline.create({
+      data: {
+        ...parsed.data,
+        responsibleId: parsed.data.responsibleId ?? auth.user.id,
+      },
+    });
+    const sourceKey = `legal-deadline:${deadline.id}`;
+    await prisma.calendarEvent.create({
+      data: {
+        tenantId: "default",
+        title: deadline.title,
+        description:
+          "Prazo jurídico automático. Altere o registro de origem no Jurídico.",
+        type: "PRAZO",
+        status: "AGENDADO",
+        priority:
+          deadline.priority === "CRITICA"
+            ? "CRITICA"
+            : deadline.priority === "ALTA"
+              ? "ALTA"
+              : deadline.priority === "BAIXA"
+                ? "BAIXA"
+                : "MEDIA",
+        privacy: "INTERNO",
+        origin: "AUTOMACAO",
+        startAt: deadline.date,
+        endAt: new Date(deadline.date.getTime() + 60 * 60 * 1000),
+        allDay: true,
+        timezone: "America/Sao_Paulo",
+        category: "Jurídico · Prazo",
+        color: "#7c3aed",
+        department: "JURIDICO",
+        responsibleId: deadline.responsibleId,
+        sourceEntityType: "LEGAL_DEADLINE",
+        sourceEntityId: deadline.id,
+        sourceKey,
+        syncPending: true,
+      },
+    });
+    await writeAudit({
+      userId: auth.user.id,
+      action: "create",
+      entity: "LegalDeadline",
+      entityId: deadline.id,
+      after: parsed.data,
+      origin: "juridico/prazos",
+    });
   } catch {
     return { error: "Não foi possível criar o prazo." };
   }
-
-  revalidatePath("/dashboard/juridico");
+  revalidateLegal();
   return { ok: true };
 }
 
 export async function markDeadlineDone(id: string): Promise<ActionState> {
-  const auth = await requireWrite("JURIDICO");
+  const auth = await requireLegalPermission("EDIT_CONTRACT");
   if ("error" in auth) return auth;
-
   try {
-    await prisma.legalDeadline.update({
-      where: { id },
-      data: { status: "CONCLUIDO" },
+    const before = await prisma.legalDeadline.findUnique({ where: { id } });
+    if (!before) return { error: "Prazo não encontrado." };
+    await prisma.$transaction([
+      prisma.legalDeadline.update({
+        where: { id },
+        data: { status: "CONCLUIDO", completedAt: new Date() },
+      }),
+      prisma.calendarEvent.updateMany({
+        where: {
+          tenantId: "default",
+          sourceKey: `legal-deadline:${id}`,
+          deletedAt: null,
+        },
+        data: { status: "CONCLUIDO", syncPending: true },
+      }),
+    ]);
+    await writeAudit({
+      userId: auth.user.id,
+      action: "complete",
+      entity: "LegalDeadline",
+      entityId: id,
+      before,
+      after: { status: "CONCLUIDO" },
+      origin: "juridico/prazos",
     });
   } catch {
     return { error: "Não foi possível concluir o prazo." };
   }
-
-  revalidatePath("/dashboard/juridico");
+  revalidateLegal();
   return { ok: true };
 }
 
 export async function deleteDeadline(id: string): Promise<ActionState> {
-  const auth = await requireWrite("JURIDICO");
+  const auth = await requireLegalPermission("EDIT_CONTRACT");
   if ("error" in auth) return auth;
-
   try {
-    await prisma.legalDeadline.delete({ where: { id } });
+    const before = await prisma.legalDeadline.findUnique({ where: { id } });
+    if (!before) return { error: "Prazo não encontrado." };
+    await prisma.$transaction([
+      prisma.legalDeadline.delete({ where: { id } }),
+      prisma.calendarEvent.updateMany({
+        where: {
+          tenantId: "default",
+          sourceKey: `legal-deadline:${id}`,
+          deletedAt: null,
+        },
+        data: { deletedAt: new Date(), syncPending: true },
+      }),
+    ]);
+    await writeAudit({
+      userId: auth.user.id,
+      action: "delete",
+      entity: "LegalDeadline",
+      entityId: id,
+      before,
+      origin: "juridico/prazos",
+    });
   } catch {
     return { error: "Não foi possível excluir o prazo." };
   }
-
-  revalidatePath("/dashboard/juridico");
+  revalidateLegal();
   return { ok: true };
 }

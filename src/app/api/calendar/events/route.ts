@@ -127,7 +127,16 @@ export async function GET(request: NextRequest) {
             }]
           : [],
       ),
-      ...deadlines.map((item) => ({
+      ...deadlines
+        .filter(
+          (item) =>
+            !events.some(
+              (event) =>
+                event.sourceEntityType === "LEGAL_DEADLINE" &&
+                event.sourceEntityId === item.id,
+            ),
+        )
+        .map((item) => ({
         id: `legal:${item.id}`,
         source: "JURIDICO",
         title: item.title,
@@ -137,6 +146,7 @@ export async function GET(request: NextRequest) {
         status: item.status,
         editable: false,
         href: "/dashboard/juridico",
+        automatic: false,
       })),
       ...entries.flatMap((item) =>
         item.dueDate
@@ -170,11 +180,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         data: [
-          ...events.map((event) => ({
-            ...event,
-            source: "TELUN",
-            editable: true,
-          })),
+          ...events.map((event) => {
+            const automatic = event.origin === "AUTOMACAO";
+            const href =
+              event.sourceEntityType === "CONTRACT" && event.sourceEntityId
+                ? `/dashboard/juridico/contratos/${event.sourceEntityId}/edit`
+                : event.sourceEntityType === "DOCUMENT" &&
+                    event.sourceEntityId
+                  ? `/dashboard/juridico/documentos/${event.sourceEntityId}`
+                  : event.sourceEntityType === "LEGAL_DEADLINE"
+                    ? "/dashboard/juridico/prazos"
+                    : undefined;
+            return {
+              ...event,
+              source: automatic ? "JURIDICO" : "TELUN",
+              editable: !automatic,
+              automatic,
+              href,
+            };
+          }),
           ...derived,
         ],
         meta: { from, to, total: events.length + derived.length },

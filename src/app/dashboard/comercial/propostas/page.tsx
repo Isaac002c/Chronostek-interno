@@ -1,14 +1,25 @@
 import Link from "next/link";
-import { Plus, Pencil, Search, Filter, FileText } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Search,
+  Filter,
+  FileText,
+  FilePlus2,
+  ExternalLink,
+} from "lucide-react";
 import { Prisma, ProposalStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireModule } from "@/lib/session";
-import { canWrite } from "@/lib/rbac";
+import { canAccessModule, canWrite } from "@/lib/rbac";
+import { canLegal } from "@/lib/legal-permissions";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   PROPOSAL_STATUS_LABELS,
   PROPOSAL_STATUS_TONE,
   PROPOSAL_STATUS_OPTIONS,
+  CONTRACT_STATUS_LABELS,
+  CONTRACT_STATUS_TONE,
 } from "@/lib/enums";
 import { PageHeader } from "@/components/ui/page-header";
 import { Card } from "@/components/ui/card";
@@ -26,7 +37,11 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { DeleteButton } from "@/components/form/delete-button";
-import { deleteProposal } from "./actions";
+import { ActionButton } from "@/components/form/action-button";
+import {
+  deleteProposal,
+  generateContractFromProposal,
+} from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -52,7 +67,20 @@ export default async function PropostasPage({
   const [proposals, agg] = await Promise.all([
     prisma.proposal.findMany({
       where,
-      include: { client: { select: { name: true } } },
+      include: {
+        client: { select: { name: true } },
+        contract: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            startDate: true,
+            endDate: true,
+            signedAt: true,
+            legalResponsible: { select: { name: true } },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
       take: 100,
     }),
@@ -60,6 +88,11 @@ export default async function PropostasPage({
   ]);
 
   const writable = canWrite(user.role);
+  const canGenerateContract = canLegal(
+    user.role,
+    "GENERATE_CONTRACT_FROM_PROPOSAL",
+  );
+  const canOpenLegal = canAccessModule(user.role, "JURIDICO");
 
   return (
     <>
@@ -130,6 +163,7 @@ export default async function PropostasPage({
                 <TableHead>Status</TableHead>
                 <TableHead className="text-center">Prob.</TableHead>
                 <TableHead>Prevista</TableHead>
+                <TableHead>Contrato jurídico</TableHead>
                 <TableHead className="w-1 text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -144,6 +178,41 @@ export default async function PropostasPage({
                   </TableCell>
                   <TableCell className="text-center tabular-nums">{p.probability != null ? `${p.probability}%` : "—"}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{formatDate(p.expectedDate)}</TableCell>
+                  <TableCell>
+                    {p.contract ? (
+                      <div className="space-y-1 text-xs">
+                        <StatusBadge
+                          value={p.contract.status}
+                          labels={CONTRACT_STATUS_LABELS}
+                          tones={CONTRACT_STATUS_TONE}
+                        />
+                        <p className="text-muted-foreground">
+                          {formatDate(p.contract.startDate)} — {formatDate(p.contract.endDate)}
+                        </p>
+                        {canOpenLegal && (
+                          <Link
+                            href={`/dashboard/juridico/contratos/${p.contract.id}/edit`}
+                            className="inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            Abrir no Jurídico
+                            <ExternalLink className="size-3" />
+                          </Link>
+                        )}
+                      </div>
+                    ) : p.status === "ACEITA" && canGenerateContract ? (
+                      <ActionButton
+                        action={generateContractFromProposal.bind(null, p.id)}
+                        successMessage="Contrato criado no Jurídico."
+                        variant="outline"
+                        size="sm"
+                      >
+                        <FilePlus2 />
+                        Gerar contrato
+                      </ActionButton>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
                       {writable && (
