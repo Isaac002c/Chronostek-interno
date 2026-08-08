@@ -34,11 +34,56 @@ services:
       SEED_DEMO_DATA: ${SEED_DEMO_DATA:-false}
       DOCUMENT_STORAGE_ROOT: /app/storage/uploads
       DOCUMENT_MAX_BYTES: ${DOCUMENT_MAX_BYTES:-20971520}
+      AI_ENABLED: ${AI_ENABLED:-true}
+      AI_ROUTER_ORDER: ${AI_ROUTER_ORDER:-groq,gemini,cloudflare,openrouter,ollama}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-telun-comercial}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-}
+      AUTO_OUTREACH_ENABLED: ${AUTO_OUTREACH_ENABLED:-false}
       NODE_ENV: production
     volumes:
       - telun_uploads:/app/storage/uploads
     ports:
       - "8080:3000"
+    networks:
+      - telun
+
+  agent-worker:
+    build: .
+    container_name: telun-agent-worker
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@db:5432/chronostek?sslmode=disable
+      NODE_ENV: production
+      AI_ENABLED: ${AI_ENABLED:-true}
+      AI_ROUTER_ORDER: ${AI_ROUTER_ORDER:-groq,gemini,cloudflare,openrouter,ollama}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
+      CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
+      EVOLUTION_INSTANCE: ${EVOLUTION_INSTANCE:-telun-comercial}
+      EVOLUTION_WEBHOOK_SECRET: ${EVOLUTION_WEBHOOK_SECRET:-}
+      AUTO_OUTREACH_ENABLED: ${AUTO_OUTREACH_ENABLED:-false}
+      GLOBAL_AGENT_KILL_SWITCH: ${GLOBAL_AGENT_KILL_SWITCH:-false}
+      AGENT_WORKER_POLL_MS: ${AGENT_WORKER_POLL_MS:-2000}
+    command: ["npm", "run", "agent:worker"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"const s=require('fs').statSync('/tmp/telun-agent-worker-heartbeat');process.exit(Date.now()-s.mtimeMs<90000?0:1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - telun
 

@@ -44,11 +44,11 @@ async function main() {
         where: { agent: { tenantId: "default", isActive: true }, access: "ALLOW" },
       }),
     ]);
-    assert.deepEqual(agents.map((agent) => agent.slug), ["atlas", "clara", "lucas", "theo"]);
-    assert(agents.every((agent) => agent.autonomyLevel === 1));
+    assert.deepEqual(agents.map((agent) => agent.slug), ["atlas", "clara", "lucas", "maya", "rafael", "theo"]);
+    assert.deepEqual(Object.fromEntries(agents.map((agent) => [agent.slug, agent.autonomyLevel])), { atlas: 2, clara: 1, lucas: 2, maya: 2, rafael: 2, theo: 1 });
     assert(agents.every((agent) => agent.aiProvider === "groq"));
-    assert.equal(toolCount, 21);
-    assert.equal(permissionCount, 39);
+    assert.equal(toolCount, 25);
+    assert.equal(permissionCount, 58);
 
     const users = await Promise.all([
       prisma.user.create({
@@ -160,7 +160,7 @@ async function main() {
       agents: agents.length,
       tools: toolCount,
       permissions: permissionCount,
-      autonomyLevel1: true,
+      autonomyLevelsControlled: true,
       seedIdempotent: true,
       crossDepartmentBlocked: true,
       forbiddenToolBlocked: true,

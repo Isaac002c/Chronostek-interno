@@ -819,6 +819,8 @@ model User {
   agentActivityLogs         AgentActivityLog[]         @relation("AgentActivityUser")
   agentApprovalsRequested   AgentApproval[]            @relation("AgentApprovalRequestedBy")
   agentApprovalsDecided     AgentApproval[]            @relation("AgentApprovalDecidedBy")
+  prospectListsCreated      ProspectList[]             @relation("ProspectListCreatedBy")
+  prospectsOwned            Prospect[]                 @relation("ProspectSalesOwner")
 
   @@index([role])
   @@index([status])
@@ -1001,11 +1003,13 @@ model Lead {
   updatedAt         DateTime   @updatedAt
   deletedAt         DateTime?
 
-  campaign        MarketingCampaign? @relation(fields: [campaignId], references: [id])
-  responsible     User?              @relation("LeadResponsible", fields: [responsibleId], references: [id])
-  convertedClient Client?            @relation("LeadConverted", fields: [convertedClientId], references: [id])
-  interactions    LeadInteraction[]
-  tasks           Task[]             @relation("LeadTasks")
+  campaign             MarketingCampaign?    @relation(fields: [campaignId], references: [id])
+  responsible          User?                 @relation("LeadResponsible", fields: [responsibleId], references: [id])
+  convertedClient      Client?               @relation("LeadConverted", fields: [convertedClientId], references: [id])
+  interactions         LeadInteraction[]
+  tasks                Task[]                @relation("LeadTasks")
+  prospect             Prospect?
+  communicationThreads CommunicationThread[]
 
   @@index([status])
   @@index([origin])
@@ -1059,6 +1063,7 @@ model Client {
   tasks                Task[]                     @relation("ClientTasks")
   calendarEvents       CalendarEvent[]
   calendarParticipants CalendarEventParticipant[]
+  communicationThreads CommunicationThread[]
 
   @@index([status])
   @@index([internalResponsibleId])
@@ -1318,10 +1323,11 @@ model MarketingCampaign {
   updatedAt         DateTime        @updatedAt
   deletedAt         DateTime?
 
-  costCenter       CostCenter?      @relation(fields: [costCenterId], references: [id])
+  costCenter       CostCenter?             @relation(fields: [costCenterId], references: [id])
   leads            Lead[]
   financialEntries FinancialEntry[]
-  tasks            Task[]           @relation("CampaignTasks")
+  tasks            Task[]                  @relation("CampaignTasks")
+  contentDrafts    MarketingContentDraft[]
 
   @@index([channel])
   @@index([status])
@@ -2823,6 +2829,7 @@ model ProcessDefinition {
   owner             User?              @relation("ProcessOwner", fields: [ownerId], references: [id])
   reviews           ProcessReview[]
   correctiveActions CorrectiveAction[]
+  agentJobs         AgentJob[]
 
   @@unique([tenantId, code])
   @@index([status])
@@ -2972,12 +2979,18 @@ model Agent {
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  tasks           AgentTask[]
-  conversations   AgentConversation[]
-  activityLogs    AgentActivityLog[]
-  approvals       AgentApproval[]
-  memories        AgentMemory[]
-  toolPermissions AgentToolPermission[]
+  tasks             AgentTask[]
+  conversations     AgentConversation[]
+  activityLogs      AgentActivityLog[]
+  approvals         AgentApproval[]
+  memories          AgentMemory[]
+  toolPermissions   AgentToolPermission[]
+  jobs              AgentJob[]
+  schedules         AgentSchedule[]
+  events            AgentEvent[]
+  assignedProspects Prospect[]              @relation("ProspectAssignedAgent")
+  prospectBriefs    ProspectBrief[]
+  contentDrafts     MarketingContentDraft[]
 
   @@unique([tenantId, slug])
   @@index([department])
@@ -3008,6 +3021,7 @@ model AgentTask {
   createdBy    User?              @relation("AgentTaskCreatedBy", fields: [createdById], references: [id])
   approvals    AgentApproval[]
   activityLogs AgentActivityLog[]
+  jobs         AgentJob[]
 
   @@index([tenantId])
   @@index([agentId])
@@ -3157,4 +3171,585 @@ model AgentToolPermission {
   @@unique([agentId, toolId])
   @@index([agentId])
   @@index([toolId])
+}
+
+// ═════════════════════════ TELUN AUTONOMOUS WORKFORCE ═════════════════════════
+
+enum AIProviderRuntimeStatus {
+  HEALTHY
+  DEGRADED
+  RATE_LIMITED
+  OFFLINE
+}
+
+enum AgentJobStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  WAITING_PROVIDER
+  WAITING_APPROVAL
+  RETRYING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+  CANCELLED
+}
+
+enum AgentJobTriggerType {
+  MANUAL
+  EVENT
+  SCHEDULE
+  WEBHOOK
+  PROCESS
+  API
+}
+
+enum AgentEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum ProspectBusinessFit {
+  TELUN_M_PLUS
+  TELUN_TECHNOLOGY
+  BOTH
+  UNQUALIFIED
+}
+
+enum ProspectQualification {
+  A
+  B
+  C
+  D
+  UNQUALIFIED
+}
+
+enum ProspectStatus {
+  DISCOVERED
+  ENRICHING
+  QUALIFIED
+  READY_FOR_OUTREACH
+  CONTACTED
+  REPLIED
+  INTERESTED
+  TRIAL
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+  DO_NOT_CONTACT
+}
+
+enum ProspectVerificationStatus {
+  VALID
+  UNVERIFIED
+  INVALID
+  STALE
+}
+
+enum ProspectContactType {
+  PHONE
+  WHATSAPP
+  EMAIL
+  INSTAGRAM
+  LINKEDIN
+  FACEBOOK
+  WEBSITE
+  OTHER
+}
+
+enum CommunicationChannel {
+  WHATSAPP
+  EMAIL
+  SMS
+  INTERNAL
+}
+
+enum CommunicationDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum CommunicationMessageStatus {
+  DRAFT
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  RECEIVED
+  FAILED
+  CANCELLED
+}
+
+enum CommunicationThreadStatus {
+  OPEN
+  PAUSED
+  CLOSED
+}
+
+enum OutreachEnrollmentStatus {
+  ACTIVE
+  PAUSED
+  REPLIED
+  COMPLETED
+  CANCELLED
+}
+
+enum MarketingDraftStatus {
+  DRAFT
+  WAITING_APPROVAL
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  REJECTED
+}
+
+enum IntegrationRuntimeStatus {
+  NOT_CONFIGURED
+  CONNECTING
+  ONLINE
+  DEGRADED
+  OFFLINE
+}
+
+model AIProviderState {
+  id                  String                  @id @default(cuid())
+  tenantId            String                  @default("default")
+  provider            String
+  model               String
+  status              AIProviderRuntimeStatus @default(DEGRADED)
+  consecutiveFailures Int                     @default(0)
+  cooldownUntil       DateTime?
+  lastErrorCode       String?
+  lastErrorAt         DateTime?
+  lastSuccessAt       DateTime?
+  latencyMs           Int?
+  metadata            Json?
+  updatedAt           DateTime                @updatedAt
+
+  @@unique([tenantId, provider, model])
+  @@index([status])
+  @@index([cooldownUntil])
+}
+
+model AgentJob {
+  id                      String              @id @default(cuid())
+  tenantId                String              @default("default")
+  agentId                 String
+  processId               String?
+  taskId                  String?
+  parentJobId             String?
+  jobType                 String
+  triggerType             AgentJobTriggerType
+  payload                 Json?
+  priority                Int                 @default(50)
+  status                  AgentJobStatus      @default(PENDING)
+  attempts                Int                 @default(0)
+  maxAttempts             Int                 @default(3)
+  scheduledAt             DateTime            @default(now())
+  startedAt               DateTime?
+  heartbeatAt             DateTime?
+  completedAt             DateTime?
+  nextRetryAt             DateTime?
+  lockedBy                String?
+  lockedUntil             DateTime?
+  idempotencyKey          String
+  cancellationRequestedAt DateTime?
+  result                  Json?
+  lastError               String?
+  lastErrorCode           String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  agent     Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  process   ProcessDefinition? @relation(fields: [processId], references: [id], onDelete: SetNull)
+  task      AgentTask?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  parentJob AgentJob?          @relation("AgentJobHierarchy", fields: [parentJobId], references: [id], onDelete: SetNull)
+  childJobs AgentJob[]         @relation("AgentJobHierarchy")
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([status, scheduledAt])
+  @@index([lockedUntil])
+  @@index([agentId, status])
+  @@index([processId])
+}
+
+model AgentSchedule {
+  id              String              @id @default(cuid())
+  tenantId        String              @default("default")
+  agentId         String
+  name            String
+  jobType         String
+  triggerType     AgentJobTriggerType @default(SCHEDULE)
+  cronExpression  String?
+  intervalMinutes Int?
+  timeZone        String              @default("America/Sao_Paulo")
+  payload         Json?
+  priority        Int                 @default(50)
+  enabled         Boolean             @default(true)
+  lastEnqueuedAt  DateTime?
+  nextRunAt       DateTime
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([enabled, nextRunAt])
+  @@index([agentId])
+}
+
+model AgentEvent {
+  id               String           @id @default(cuid())
+  tenantId         String           @default("default")
+  agentId          String?
+  type             String
+  source           String
+  payload          Json?
+  status           AgentEventStatus @default(PENDING)
+  deduplicationKey String?
+  availableAt      DateTime         @default(now())
+  attempts         Int              @default(0)
+  processedAt      DateTime?
+  lastError        String?
+  createdAt        DateTime         @default(now())
+
+  agent Agent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, deduplicationKey])
+  @@index([status, availableAt])
+  @@index([type])
+}
+
+model ProspectList {
+  id          String   @id @default(cuid())
+  tenantId    String   @default("default")
+  name        String
+  description String?
+  icp         Json?
+  status      String   @default("ACTIVE")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy User?                    @relation("ProspectListCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  prospects ProspectListMembership[]
+
+  @@unique([tenantId, name])
+  @@index([status])
+}
+
+model Prospect {
+  id                  String                     @id @default(cuid())
+  tenantId            String                     @default("default")
+  companyName         String
+  normalizedName      String
+  tradeName           String?
+  cnpj                String?                    @unique
+  segment             String?
+  cnae                String?
+  companySize         String?
+  city                String?
+  state               String?
+  address             String?
+  website             String?
+  websiteDomain       String?
+  commercialPhone     String?
+  commercialWhatsApp  String?
+  commercialEmail     String?
+  instagram           String?
+  linkedin            String?
+  facebook            String?
+  otherSocials        Json?
+  contactName         String?
+  contactRole         String?
+  contactPhone        String?
+  contactEmail        String?
+  source              String
+  sourceUrl           String?
+  sourceDate          DateTime                   @default(now())
+  verificationStatus  ProspectVerificationStatus @default(UNVERIFIED)
+  marketingFitScore   Int                        @default(0)
+  technologyFitScore  Int                        @default(0)
+  overallScore        Int                        @default(0)
+  businessFit         ProspectBusinessFit        @default(UNQUALIFIED)
+  qualification       ProspectQualification      @default(UNQUALIFIED)
+  qualificationReason String?
+  painPoints          Json?
+  digitalSignals      Json?
+  technologySignals   Json?
+  assignedAgentId     String?
+  salesOwnerId        String?
+  leadId              String?                    @unique
+  lastContactAt       DateTime?
+  nextFollowupAt      DateTime?
+  doNotContact        Boolean                    @default(false)
+  status              ProspectStatus             @default(DISCOVERED)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  assignedAgent        Agent?                   @relation("ProspectAssignedAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  salesOwner           User?                    @relation("ProspectSalesOwner", fields: [salesOwnerId], references: [id], onDelete: SetNull)
+  lead                 Lead?                    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  sources              ProspectSource[]
+  contacts             ProspectContact[]
+  signals              ProspectSignal[]
+  lists                ProspectListMembership[]
+  briefs               ProspectBrief[]
+  communicationThreads CommunicationThread[]
+  outreachEnrollments  OutreachEnrollment[]
+
+  @@index([tenantId, status])
+  @@index([businessFit, qualification])
+  @@index([overallScore])
+  @@index([normalizedName])
+  @@index([websiteDomain])
+  @@index([commercialPhone])
+  @@index([commercialEmail])
+  @@index([doNotContact])
+}
+
+model ProspectSource {
+  id                 String                     @id @default(cuid())
+  prospectId         String
+  field              String
+  value              String
+  source             String
+  sourceUrl          String?
+  foundAt            DateTime                   @default(now())
+  confidence         Float                      @default(0.5)
+  verificationStatus ProspectVerificationStatus @default(UNVERIFIED)
+  verifiedAt         DateTime?
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId, field])
+  @@index([verificationStatus])
+}
+
+model ProspectContact {
+  id                 String                     @id @default(cuid())
+  prospectId         String
+  type               ProspectContactType
+  value              String
+  normalizedValue    String
+  label              String?
+  source             String
+  sourceUrl          String?
+  confidence         Float                      @default(0.5)
+  verificationStatus ProspectVerificationStatus @default(UNVERIFIED)
+  isPublic           Boolean                    @default(true)
+  isPrimary          Boolean                    @default(false)
+  foundAt            DateTime                   @default(now())
+  verifiedAt         DateTime?
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@unique([prospectId, type, normalizedValue])
+  @@index([type, normalizedValue])
+  @@index([verificationStatus])
+}
+
+model ProspectSignal {
+  id         String   @id @default(cuid())
+  prospectId String
+  category   String
+  key        String
+  value      String
+  weight     Int      @default(0)
+  sourceUrl  String?
+  observedAt DateTime @default(now())
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId, category])
+}
+
+model ProspectListMembership {
+  listId     String
+  prospectId String
+  addedAt    DateTime @default(now())
+
+  list     ProspectList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  prospect Prospect     @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  @@id([listId, prospectId])
+  @@index([prospectId])
+}
+
+model ProspectBrief {
+  id         String   @id @default(cuid())
+  prospectId String
+  agentId    String
+  title      String
+  summary    String
+  painPoints Json?
+  approach   String?
+  draft      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  prospect Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  agent    Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([prospectId])
+  @@index([agentId])
+}
+
+model CommunicationThread {
+  id               String                    @id @default(cuid())
+  tenantId         String                    @default("default")
+  channel          CommunicationChannel
+  provider         String
+  providerThreadId String?
+  prospectId       String?
+  leadId           String?
+  clientId         String?
+  status           CommunicationThreadStatus @default(OPEN)
+  lastMessageAt    DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  prospect Prospect?              @relation(fields: [prospectId], references: [id], onDelete: SetNull)
+  lead     Lead?                  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  client   Client?                @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  messages CommunicationMessage[]
+
+  @@index([prospectId])
+  @@index([leadId])
+  @@index([clientId])
+  @@index([channel, status])
+}
+
+model CommunicationMessage {
+  id                String                     @id @default(cuid())
+  threadId          String
+  channel           CommunicationChannel
+  provider          String
+  direction         CommunicationDirection
+  status            CommunicationMessageStatus @default(DRAFT)
+  agentId           String?
+  message           String
+  providerMessageId String?
+  metadata          Json?
+  scheduledAt       DateTime?
+  sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  receivedAt        DateTime?
+  createdAt         DateTime                   @default(now())
+
+  thread CommunicationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerMessageId])
+  @@index([threadId, createdAt])
+  @@index([status, scheduledAt])
+}
+
+model SuppressionEntry {
+  id              String   @id @default(cuid())
+  tenantId        String   @default("default")
+  type            String
+  value           String
+  normalizedValue String
+  reason          String
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, type, normalizedValue])
+  @@index([active])
+}
+
+model OutreachCadence {
+  id                String   @id @default(cuid())
+  tenantId          String   @default("default")
+  name              String
+  description       String?
+  enabled           Boolean  @default(true)
+  maxFollowups      Int      @default(3)
+  dailyLimit        Int      @default(20)
+  hourlyLimit       Int      @default(5)
+  businessHourStart Int      @default(9)
+  businessHourEnd   Int      @default(18)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  steps       OutreachCadenceStep[]
+  enrollments OutreachEnrollment[]
+
+  @@unique([tenantId, name])
+}
+
+model OutreachCadenceStep {
+  id        String @id @default(cuid())
+  cadenceId String
+  order     Int
+  delayDays Int
+  template  String
+
+  cadence OutreachCadence @relation(fields: [cadenceId], references: [id], onDelete: Cascade)
+
+  @@unique([cadenceId, order])
+}
+
+model OutreachEnrollment {
+  id            String                   @id @default(cuid())
+  prospectId    String
+  cadenceId     String
+  status        OutreachEnrollmentStatus @default(ACTIVE)
+  nextStepOrder Int                      @default(0)
+  nextRunAt     DateTime?
+  lastRunAt     DateTime?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  prospect Prospect        @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  cadence  OutreachCadence @relation(fields: [cadenceId], references: [id], onDelete: Cascade)
+
+  @@unique([prospectId, cadenceId])
+  @@index([status, nextRunAt])
+}
+
+model MarketingContentDraft {
+  id          String               @id @default(cuid())
+  tenantId    String               @default("default")
+  campaignId  String?
+  agentId     String
+  segment     String?
+  businessFit ProspectBusinessFit?
+  contentType String
+  title       String
+  body        String?
+  brief       String?
+  metadata    Json?
+  status      MarketingDraftStatus @default(DRAFT)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  campaign MarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  agent    Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([agentId, status])
+}
+
+model IntegrationConnection {
+  id            String                   @id @default(cuid())
+  tenantId      String                   @default("default")
+  provider      String
+  name          String
+  instanceName  String?
+  status        IntegrationRuntimeStatus @default(NOT_CONFIGURED)
+  config        Json?
+  lastHealthAt  DateTime?
+  lastEventAt   DateTime?
+  lastErrorCode String?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@unique([tenantId, provider, name])
+  @@index([status])
 }

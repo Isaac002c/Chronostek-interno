@@ -27,6 +27,9 @@
     "test:office": "tsx scripts/test-office-ai.ts",
     "test:office:db": "tsx scripts/test-office-db.ts",
     "calendar:worker": "tsx scripts/calendar-sync-worker.ts",
+    "agent:worker": "tsx scripts/agent-worker.ts",
+    "test:workforce": "tsx scripts/test-workforce.ts",
+    "test:workforce:db": "tsx scripts/test-workforce-db.ts",
     "test:integration": "tsx scripts/test-integration.ts",
     "test:deploy": "tsx scripts/test-deployment-contract.ts",
     "postinstall": "prisma generate"

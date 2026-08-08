@@ -21,7 +21,11 @@ type OllamaChatResponse = {
 
 export class OllamaProvider implements AIProvider {
   readonly name = "ollama";
-  constructor(private readonly cfg: AIConfig) {}
+  readonly model: string;
+  readonly capabilities = new Set(["chat", "tools", "structured_output"] as const);
+  constructor(private readonly cfg: AIConfig) {
+    this.model = cfg.ollamaModel;
+  }
 
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<ChatResult> {
     const controller = new AbortController();
@@ -32,7 +36,7 @@ export class OllamaProvider implements AIProvider {
     }
     try {
       const body: Record<string, unknown> = {
-        model: this.cfg.model,
+        model: this.model,
         messages: messages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -65,10 +69,14 @@ export class OllamaProvider implements AIProvider {
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
-        throw new AIError(`Ollama respondeu ${res.status}: ${text.slice(0, 200)}`);
+        throw new AIError(`Ollama respondeu ${res.status}: ${text.slice(0, 200)}`, res.status >= 500 ? "AI_SERVER_ERROR" : "AI_BAD_REQUEST", {
+          status: res.status,
+          provider: this.name,
+          model: this.model,
+        });
       }
       const data = (await res.json()) as OllamaChatResponse;
-      if (data.error) throw new AIError(data.error);
+      if (data.error) throw new AIError(data.error, "AI_PROVIDER_UNAVAILABLE", { provider: this.name, model: this.model });
 
       const toolCalls: ToolCallRequest[] = (data.message?.tool_calls ?? [])
         .map((tc, i): ToolCallRequest | null => {
@@ -89,15 +97,16 @@ export class OllamaProvider implements AIProvider {
         })
         .filter((x): x is ToolCallRequest => x !== null);
 
-      return { content: data.message?.content?.trim() ?? "", toolCalls, raw: data };
+      return { content: data.message?.content?.trim() ?? "", toolCalls, provider: this.name, model: this.model };
     } catch (err) {
       if (controller.signal.aborted) {
-        throw new AIError("Tempo limite excedido ao consultar a IA.", "TIMEOUT");
+        throw new AIError("Tempo limite excedido ao consultar a IA.", "AI_TIMEOUT", { provider: this.name, model: this.model });
       }
       if (err instanceof AIError) throw err;
       throw new AIError(
         `Falha ao conectar no runtime de IA: ${(err as Error).message}`,
-        "OFFLINE",
+        "AI_NETWORK_ERROR",
+        { provider: this.name, model: this.model },
       );
     } finally {
       clearTimeout(timeout);
@@ -112,29 +121,29 @@ export class OllamaProvider implements AIProvider {
         signal: controller.signal,
       });
       if (!res.ok) {
-        return { status: "OFFLINE", provider: this.name, model: this.cfg.model, detail: `HTTP ${res.status}` };
+        return { status: "OFFLINE", provider: this.name, model: this.model, detail: `HTTP ${res.status}` };
       }
       const data = (await res.json()) as { models?: { name?: string; model?: string }[] };
       const models = (data.models ?? [])
         .map((m) => m.model ?? m.name ?? "")
         .filter(Boolean);
-      const base = this.cfg.model.split(":")[0];
-      const has = models.some((m) => m === this.cfg.model || m.startsWith(base));
+      const base = this.model.split(":")[0];
+      const has = models.some((m) => m === this.model || m.startsWith(base));
       if (!has) {
         return {
           status: "DEGRADED",
           provider: this.name,
-          model: this.cfg.model,
+          model: this.model,
           detail: "Runtime disponível, mas o modelo não está instalado.",
           models,
         };
       }
-      return { status: "ONLINE", provider: this.name, model: this.cfg.model, models };
+      return { status: "ONLINE", provider: this.name, model: this.model, models };
     } catch {
       return {
         status: "OFFLINE",
         provider: this.name,
-        model: this.cfg.model,
+        model: this.model,
         detail: "Runtime de IA indisponível.",
       };
     } finally {

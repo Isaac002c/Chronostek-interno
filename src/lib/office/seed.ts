@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { AGENT_SEEDS, TOOL_SEEDS } from "./agent-catalog";
 import { DEFAULT_TENANT } from "./agents";
+import { seedWorkforce } from "@/lib/workforce/seed";
 
 // Seed idempotente do TELUN OFFICE (§52). Reexecutar NÃO duplica: tudo via
 // upsert por chave única (tenantId+slug / agentId+toolId). Cria apenas
@@ -75,5 +76,6 @@ export async function seedOffice(prisma: PrismaClient, tenantId = DEFAULT_TENANT
     }
   }
 
-  return { agents: AGENT_SEEDS.length, tools: TOOL_SEEDS.length };
+  const workforce = await seedWorkforce(prisma, tenantId);
+  return { agents: AGENT_SEEDS.length, tools: TOOL_SEEDS.length, workforce };
 }

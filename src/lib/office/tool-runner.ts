@@ -22,6 +22,7 @@ export type ToolExecution = {
 const CATEGORY_MODULE: Record<ToolCategory, NavModule> = {
   financeiro: "FINANCEIRO",
   comercial: "COMERCIAL",
+  marketing: "MARKETING",
   ti: "TI",
   executivo: "OFFICE",
   shared: "OFFICE",

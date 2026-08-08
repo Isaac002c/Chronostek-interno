@@ -9,7 +9,7 @@ import type { SessionUser } from "@/lib/session";
 // A autoridade (permissão/autonomia/aprovação) é aplicada no tool-runner, no
 // backend — o handler só roda depois de autorizado.
 
-export type ToolCategory = "financeiro" | "comercial" | "ti" | "executivo" | "shared";
+export type ToolCategory = "financeiro" | "comercial" | "marketing" | "ti" | "executivo" | "shared";
 
 export type ToolContext = {
   user: SessionUser;

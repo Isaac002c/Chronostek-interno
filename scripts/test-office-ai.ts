@@ -4,7 +4,8 @@ import { resolve } from "node:path";
 import type { AIConfig } from "../src/lib/ai/config";
 import { getAIConfig } from "../src/lib/ai/config";
 import { GroqProvider } from "../src/lib/ai/groq";
-import { AIError, type ChatMessage } from "../src/lib/ai/types";
+import { AIRouter } from "../src/lib/ai/router";
+import { AIError, type AIProvider, type ChatMessage, type ChatResult } from "../src/lib/ai/types";
 import { sanitizeForAI, serializeToolResultForAI } from "../src/lib/office/ai-data";
 import {
   canUserExecuteToolMutation,
@@ -26,7 +27,19 @@ function config(overrides: Partial<AIConfig> = {}): AIConfig {
     provider: "groq",
     groqApiKey: "test-only-secret-value",
     groqBaseUrl: "https://api.groq.test/openai/v1",
+    geminiApiKey: undefined,
+    geminiBaseUrl: "https://generativelanguage.googleapis.test/v1beta/openai",
+    geminiModel: "gemini-3.6-flash",
+    cloudflareApiToken: undefined,
+    cloudflareAccountId: undefined,
+    cloudflareBaseUrl: undefined,
+    cloudflareModel: "@cf/meta/llama-3.1-8b-instruct",
+    openrouterApiKey: undefined,
+    openrouterBaseUrl: "https://openrouter.test/api/v1",
+    openrouterModel: "openrouter/free",
     ollamaBaseUrl: "http://localhost:11434",
+    ollamaModel: "qwen2.5:3b-instruct",
+    routerOrder: ["groq", "gemini", "cloudflare", "openrouter", "ollama"],
     model: "qwen/qwen3.6-27b",
     maxConcurrency: 1,
     requestTimeoutMs: 5_000,
@@ -36,6 +49,9 @@ function config(overrides: Partial<AIConfig> = {}): AIConfig {
     maxToolCalls: 10,
     historyLimit: 12,
     maxRetries: 1,
+    maxOutputTokens: 700,
+    circuitFailureThreshold: 2,
+    circuitCooldownMs: 60_000,
     ...overrides,
   };
 }
@@ -141,9 +157,103 @@ await test("Groq: 429 não entra em retry", async () => {
   const provider = new GroqProvider(config({ maxRetries: 2 }), fetcher);
   await assert.rejects(
     () => provider.chat([{ role: "user", content: "oi" }]),
-    (error: unknown) => error instanceof AIError && error.code === "RATE_LIMIT",
+    (error: unknown) => error instanceof AIError && error.code === "AI_RATE_LIMIT",
   );
   assert.equal(calls, 1);
+});
+
+function fakeProvider(
+  name: string,
+  outcomes: Array<ChatResult | AIError>,
+  calls: string[],
+): AIProvider {
+  return {
+    name,
+    model: `${name}-model`,
+    capabilities: new Set(["chat", "tools", "structured_output"] as const),
+    async chat() {
+      calls.push(name);
+      const outcome = outcomes.shift();
+      if (!outcome) throw new Error(`Sem resultado fake para ${name}`);
+      if (outcome instanceof AIError) throw outcome;
+      return outcome;
+    },
+    async healthCheck() {
+      return { status: "ONLINE", provider: name, model: `${name}-model` };
+    },
+  };
+}
+
+const success = (content: string): ChatResult => ({ content, toolCalls: [] });
+const failure = (provider: string, code: AIError["code"], retryAfterMs?: number) =>
+  new AIError(`falha ${provider}`, code, {
+    provider,
+    model: `${provider}-model`,
+    status: code === "AI_RATE_LIMIT" ? 429 : 503,
+    retryAfterMs,
+  });
+
+await test("AIRouter: Groq 429 faz failover imediato para Gemini", async () => {
+  const calls: string[] = [];
+  const router = new AIRouter(config(), [
+    fakeProvider("groq", [failure("groq", "AI_RATE_LIMIT", 30_000)], calls),
+    fakeProvider("gemini", [success("gemini ok")], calls),
+  ]);
+  const result = await router.chat([{ role: "user", content: "oi" }]);
+  assert.equal(result.content, "gemini ok");
+  assert.equal(result.provider, "gemini");
+  assert.deepEqual(calls, ["groq", "gemini"]);
+});
+
+await test("AIRouter: Gemini indisponível segue para Cloudflare", async () => {
+  const calls: string[] = [];
+  const router = new AIRouter(config(), [
+    fakeProvider("gemini", [failure("gemini", "AI_SERVER_ERROR")], calls),
+    fakeProvider("cloudflare", [success("cloudflare ok")], calls),
+  ]);
+  assert.equal((await router.chat([{ role: "user", content: "oi" }])).provider, "cloudflare");
+  assert.deepEqual(calls, ["gemini", "cloudflare"]);
+});
+
+await test("AIRouter: Cloudflare indisponível segue para OpenRouter", async () => {
+  const calls: string[] = [];
+  const router = new AIRouter(config(), [
+    fakeProvider("cloudflare", [failure("cloudflare", "AI_NETWORK_ERROR")], calls),
+    fakeProvider("openrouter", [success("openrouter ok")], calls),
+  ]);
+  assert.equal((await router.chat([{ role: "user", content: "oi" }])).provider, "openrouter");
+  assert.deepEqual(calls, ["cloudflare", "openrouter"]);
+});
+
+await test("AIRouter: todos indisponíveis expõem retry seguro para WAITING_PROVIDER", async () => {
+  const calls: string[] = [];
+  const router = new AIRouter(config(), [
+    fakeProvider("groq", [failure("groq", "AI_RATE_LIMIT", 45_000)], calls),
+    fakeProvider("gemini", [failure("gemini", "AI_CONFIGURATION_ERROR")], calls),
+  ]);
+  await assert.rejects(
+    () => router.chat([{ role: "user", content: "oi" }]),
+    (error: unknown) =>
+      error instanceof AIError &&
+      error.attempts?.length === 2 &&
+      (error.retryAfterMs ?? 0) > 0,
+  );
+});
+
+await test("AIRouter: provider volta após cooldown e retoma automaticamente", async () => {
+  let now = 1_000;
+  const calls: string[] = [];
+  const provider = fakeProvider(
+    "groq",
+    [failure("groq", "AI_RATE_LIMIT", 10_000), success("restaurado")],
+    calls,
+  );
+  const router = new AIRouter(config({ circuitCooldownMs: 10_000 }), [provider], () => now);
+  await assert.rejects(() => router.chat([{ role: "user", content: "oi" }]));
+  now += 10_001;
+  const result = await router.chat([{ role: "user", content: "oi" }]);
+  assert.equal(result.content, "restaurado");
+  assert.deepEqual(calls, ["groq", "groq"]);
 });
 
 await test("Groq: 5xx usa somente um retry conservador", async () => {
@@ -170,7 +280,7 @@ await test("Groq: chave ausente mantém fallback sem request", async () => {
   assert.equal((await provider.healthCheck()).status, "OFFLINE");
   await assert.rejects(
     () => provider.chat([{ role: "user", content: "oi" }]),
-    (error: unknown) => error instanceof AIError && error.code === "OFFLINE",
+    (error: unknown) => error instanceof AIError && error.code === "AI_CONFIGURATION_ERROR",
   );
   assert.equal(calls, 0);
 });

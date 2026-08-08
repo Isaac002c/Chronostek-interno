@@ -97,11 +97,13 @@ export async function runAgentTurn(params: {
   let promptTokens = 0;
   let completionTokens = 0;
   let totalTokens = 0;
+  let selectedProvider: string = cfg.provider;
+  let selectedModel = cfg.model;
 
   try {
     return await withConcurrency(cfg.maxConcurrency, async () => {
       if (!cfg.enabled) {
-        throw new AIError("A IA está desabilitada no backend.", "OFFLINE");
+        throw new AIError("A IA está desabilitada no backend.", "AI_CONFIGURATION_ERROR");
       }
       await setAgentStatus(agent.id, "WORKING", "Analisando sua mensagem");
       await logActivity(
@@ -116,13 +118,15 @@ export async function runAgentTurn(params: {
         const result = await provider.chat(messages, {
           tools: toolSpecs.length > 0 ? toolSpecs : undefined,
         });
+        selectedProvider = result.provider ?? selectedProvider;
+        selectedModel = result.model ?? selectedModel;
         promptTokens += result.usage?.promptTokens ?? 0;
         completionTokens += result.usage?.completionTokens ?? 0;
         totalTokens += result.usage?.totalTokens ?? 0;
 
         if (result.toolCalls.length === 0) {
           if (!result.content) {
-            throw new AIError("O provider de IA retornou uma resposta vazia.", "INVALID_RESPONSE");
+            throw new AIError("O provider de IA retornou uma resposta vazia.", "AI_INVALID_RESPONSE");
           }
           finalText = result.content;
           break;
@@ -183,8 +187,8 @@ export async function runAgentTurn(params: {
             type: "ERROR",
             title: "Limite seguro de ferramentas atingido",
             metadata: {
-              provider: provider.name,
-              model: cfg.model,
+              provider: selectedProvider,
+              model: selectedModel,
               status: "LIMIT_REACHED",
               requests: aiRequests,
               toolCalls: toolCallCount,
@@ -204,8 +208,8 @@ export async function runAgentTurn(params: {
           type: "MESSAGE",
           title: "Respondeu ao usuário",
           metadata: {
-            provider: provider.name,
-            model: cfg.model,
+            provider: selectedProvider,
+            model: selectedModel,
             status: limitReached ? "LIMIT_REACHED" : "SUCCESS",
             latencyMs: Date.now() - startedAt,
             requests: aiRequests,
@@ -228,14 +232,25 @@ export async function runAgentTurn(params: {
         { tenantId, agentId: agent.id, conversationId, userId: user.id },
         {
           type: "ERROR",
-          title: err.code === "RATE_LIMIT" ? "Limite do provider de IA atingido" : "IA indisponível ao responder",
+          title:
+            err.code === "AI_RATE_LIMIT"
+              ? "Limite temporário do provider de IA atingido"
+              : err.code === "AI_QUOTA_EXHAUSTED"
+                ? "Quota do provider de IA esgotada"
+                : "IA indisponível ao responder",
           description: err.message,
           metadata: {
-            provider: provider.name,
-            model: cfg.model,
+            provider: err.provider ?? selectedProvider,
+            model: err.model ?? selectedModel,
             status: "ERROR",
             errorCode: err.code,
             providerStatus: err.status ?? null,
+            providerErrorType: err.providerErrorType ?? null,
+            providerErrorCode: err.providerErrorCode ?? null,
+            providerMessage: err.providerMessage ?? null,
+            retryAfterMs: err.retryAfterMs ?? null,
+            rateLimit: err.rateLimit ?? null,
+            attempts: err.attempts ?? null,
             latencyMs: Date.now() - startedAt,
             requests: aiRequests,
             toolCalls: toolCallCount,
@@ -252,8 +267,8 @@ export async function runAgentTurn(params: {
         title: "Erro ao processar a conversa",
         description: "Falha interna no Agent Engine.",
         metadata: {
-          provider: provider.name,
-          model: cfg.model,
+          provider: selectedProvider,
+          model: selectedModel,
           status: "ERROR",
           errorType: err instanceof Error ? err.name : "UnknownError",
           latencyMs: Date.now() - startedAt,

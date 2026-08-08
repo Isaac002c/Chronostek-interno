@@ -12,6 +12,7 @@ import {
   CheckSquare,
   Settings,
   Bot,
+  Telescope,
   type LucideIcon,
 } from "lucide-react";
 import { canAccessModule, type NavModule } from "./rbac";
@@ -80,6 +81,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Briefcase,
     modules: ["COMERCIAL", "LEADS"],
     match: ["/dashboard/comercial", "/dashboard/leads"],
+  },
+  {
+    key: "prospeccao",
+    label: "Prospecção",
+    href: "/dashboard/prospeccao",
+    icon: Telescope,
+    modules: ["PROSPECCAO"],
+    match: ["/dashboard/prospeccao"],
   },
   {
     key: "financeiro",
@@ -163,6 +172,17 @@ export const MODULE_TABS: Record<string, NavTab[]> = {
     { label: "Tarefas", href: "/dashboard/office/tarefas", module: "OFFICE" },
     { label: "Aprovações", href: "/dashboard/office/aprovacoes", module: "OFFICE" },
     { label: "Atividades", href: "/dashboard/office/atividades", module: "OFFICE" },
+    { label: "Jobs", href: "/dashboard/office/jobs", module: "OFFICE" },
+  ],
+  prospeccao: [
+    { label: "Visão Geral", href: "/dashboard/prospeccao", module: "PROSPECCAO" },
+    { label: "Listas", href: "/dashboard/prospeccao?view=listas", module: "PROSPECCAO" },
+    { label: "Prospects", href: "/dashboard/prospeccao?view=prospects", module: "PROSPECCAO" },
+    { label: "Telun M+", href: "/dashboard/prospeccao?fit=TELUN_M_PLUS", module: "PROSPECCAO" },
+    { label: "Telun Tecnologia", href: "/dashboard/prospeccao?fit=TELUN_TECHNOLOGY", module: "PROSPECCAO" },
+    { label: "Ambos", href: "/dashboard/prospeccao?fit=BOTH", module: "PROSPECCAO" },
+    { label: "SDR", href: "/dashboard/prospeccao?agent=lucas", module: "PROSPECCAO" },
+    { label: "BDR", href: "/dashboard/prospeccao?agent=rafael", module: "PROSPECCAO" },
   ],
   comercial: [
     { label: "Leads / CRM", href: "/dashboard/leads", module: "LEADS" },

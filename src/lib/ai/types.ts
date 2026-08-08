@@ -1,19 +1,16 @@
-// Abstração de provider de IA. O Agent Engine depende apenas deste contrato;
-// trocar Groq/Ollama não altera agentes, tools ou regras de negócio.
+// Contrato provider-agnostic. Providers sugerem tool calls; somente o backend
+// Telun pode validá-las e executá-las.
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
 export type ChatMessage = {
   role: ChatRole;
   content: string;
-  /** Preenchido em mensagens role="tool": nome da ferramenta que produziu o conteúdo. */
   toolName?: string;
   toolCallId?: string;
-  /** Necessário para preservar o protocolo assistant -> tool_calls -> tool. */
   toolCalls?: ToolCallRequest[];
 };
 
-/** Contrato de tool exposto ao modelo (JSON Schema, estilo OpenAI/Ollama). */
 export type ToolSpec = {
   name: string;
   description: string;
@@ -29,6 +26,8 @@ export type ToolCallRequest = {
 export type ChatResult = {
   content: string;
   toolCalls: ToolCallRequest[];
+  provider?: string;
+  model?: string;
   usage?: {
     promptTokens?: number;
     completionTokens?: number;
@@ -46,35 +45,102 @@ export type AIHealth = {
   model: string;
   detail?: string;
   models?: string[];
+  providers?: Array<{
+    provider: string;
+    model: string;
+    status: AIHealthStatus;
+    detail?: string;
+    cooldownUntil?: string;
+  }>;
 };
+
+export type AICapability =
+  | "chat"
+  | "tools"
+  | "structured_output"
+  | "vision"
+  | "reasoning"
+  | "image_generation"
+  | "large_context";
 
 export type ChatOptions = {
   tools?: ToolSpec[];
   temperature?: number;
   signal?: AbortSignal;
+  capabilities?: AICapability[];
+  responseFormat?: "text" | "json_object";
 };
 
 export interface AIProvider {
   readonly name: string;
+  readonly model: string;
+  readonly capabilities: ReadonlySet<AICapability>;
   chat(messages: ChatMessage[], opts?: ChatOptions): Promise<ChatResult>;
   healthCheck(): Promise<AIHealth>;
 }
 
-/** Erro tipado da camada de IA — permite fallback claro no Agent Engine (§47/§48). */
-export class AIError extends Error {
-  code:
-    | "AI_ERROR"
-    | "TIMEOUT"
-    | "OFFLINE"
-    | "RATE_LIMIT"
-    | "PROVIDER_ERROR"
-    | "INVALID_RESPONSE";
-  status?: number;
+export type AIErrorCode =
+  | "AI_AUTH_ERROR"
+  | "AI_RATE_LIMIT"
+  | "AI_QUOTA_EXHAUSTED"
+  | "AI_MODEL_UNAVAILABLE"
+  | "AI_PROVIDER_UNAVAILABLE"
+  | "AI_TIMEOUT"
+  | "AI_NETWORK_ERROR"
+  | "AI_BAD_REQUEST"
+  | "AI_TOOL_ERROR"
+  | "AI_CONTEXT_TOO_LARGE"
+  | "AI_CONFIGURATION_ERROR"
+  | "AI_SERVER_ERROR"
+  | "AI_INVALID_RESPONSE"
+  | "AI_UNKNOWN_ERROR";
 
-  constructor(message: string, code: AIError["code"] = "AI_ERROR", status?: number) {
+/** Erro sanitizado: nunca carrega request headers, payload bruto ou secrets. */
+export class AIError extends Error {
+  code: AIErrorCode;
+  status?: number;
+  provider?: string;
+  model?: string;
+  providerErrorType?: string;
+  providerErrorCode?: string;
+  providerMessage?: string;
+  retryAfterMs?: number;
+  latencyMs?: number;
+  rateLimit?: {
+    limitRequests?: number;
+    remainingRequests?: number;
+    limitTokens?: number;
+    remainingTokens?: number;
+    resetRequests?: string;
+    resetTokens?: string;
+  };
+  attempts?: Array<{
+    provider: string;
+    model: string;
+    code: AIErrorCode;
+    status?: number;
+    latencyMs?: number;
+    retryAfterMs?: number;
+  }>;
+
+  constructor(
+    message: string,
+    code: AIErrorCode = "AI_UNKNOWN_ERROR",
+    details: {
+      status?: number;
+      provider?: string;
+      model?: string;
+      providerErrorType?: string;
+      providerErrorCode?: string;
+      providerMessage?: string;
+      retryAfterMs?: number;
+      latencyMs?: number;
+      rateLimit?: AIError["rateLimit"];
+    } = {},
+  ) {
     super(message);
     this.name = "AIError";
     this.code = code;
-    this.status = status;
+    Object.assign(this, details);
   }
 }

@@ -3,6 +3,7 @@ import { CLARA_TOOLS } from "./clara";
 import { LUCAS_TOOLS } from "./lucas";
 import { THEO_TOOLS } from "./theo";
 import { ATLAS_TOOLS } from "./atlas";
+import { PROSPECTING_TOOLS } from "./prospecting";
 import type { ToolDefinition } from "./types";
 import type { ToolSpec } from "@/lib/ai";
 
@@ -14,6 +15,7 @@ export const ALL_TOOLS: ToolDefinition[] = [
   ...LUCAS_TOOLS,
   ...THEO_TOOLS,
   ...ATLAS_TOOLS,
+  ...PROSPECTING_TOOLS,
 ];
 
 const REGISTRY = new Map<string, ToolDefinition>(ALL_TOOLS.map((t) => [t.slug, t]));
