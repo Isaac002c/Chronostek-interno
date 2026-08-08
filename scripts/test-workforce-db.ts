@@ -22,6 +22,11 @@ async function main() {
     assert.equal(await prisma.agentSchedule.count({ where: { tenantId: "default" } }), 5);
     const agents = Object.fromEntries((await prisma.agent.findMany({ where: { tenantId: "default" }, select: { slug: true, id: true } })).map((item) => [item.slug, item.id]));
 
+    // O banco é descartável e protegido pelo nome/flag acima. Remove resíduos de
+    // uma execução interrompida para que o ensaio de locking seja determinístico.
+    await prisma.agentEvent.deleteMany();
+    await prisma.agentJob.deleteMany();
+
     const lease = await enqueueJob({ agentId: agents.theo, jobType: "ATLAS_DAILY", triggerType: "API", payload: {}, priority: 100, idempotencyKey: `test:${marker}:lease` }); ids.push(lease.id);
     const same = await enqueueJob({ agentId: agents.theo, jobType: "ATLAS_DAILY", triggerType: "API", payload: {}, priority: 100, idempotencyKey: `test:${marker}:lease` }); assert.equal(same.id, lease.id);
     const claimed = await claimNextJob(`test-worker-${marker}`, 1); assert.equal(claimed?.id, lease.id);
@@ -66,7 +71,7 @@ async function main() {
     await prisma.outreachEnrollment.deleteMany({ where: { prospectId: { in: prospectIds } } }); await prisma.prospectBrief.deleteMany({ where: { prospectId: { in: prospectIds } } }); await prisma.communicationThread.deleteMany({ where: { prospectId: { in: prospectIds } } }); await prisma.prospect.deleteMany({ where: { id: { in: prospectIds } } });
     await prisma.prospectList.deleteMany({ where: { name: `ICP fixture ${marker}` } });
     const campaigns = await prisma.marketingCampaign.findMany({ where: { name: { contains: marker } }, select: { id: true } }); await prisma.marketingContentDraft.deleteMany({ where: { campaignId: { in: campaigns.map((item) => item.id) } } }); await prisma.marketingCampaign.deleteMany({ where: { id: { in: campaigns.map((item) => item.id) } } });
-    await prisma.agentEvent.deleteMany({ where: { deduplicationKey: { startsWith: `test:${marker}` } } }); await prisma.agentJob.deleteMany({ where: { idempotencyKey: { contains: marker } } }); await prisma.$disconnect();
+    await prisma.agentEvent.deleteMany(); await prisma.agentJob.deleteMany(); await prisma.$disconnect();
   }
 }
 main().catch((error) => { console.error(error); process.exit(1); });
