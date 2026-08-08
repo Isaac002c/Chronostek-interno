@@ -62,9 +62,27 @@ await test("Groq: chat simples, modelo e métricas", async () => {
   const result = await provider.chat([{ role: "user", content: "Qual é sua função?" }]);
   assert.equal(result.content, "Olá da Clara");
   assert.equal(result.usage?.totalTokens, 16);
-  assert.equal(JSON.parse(seenBody).model, "qwen/qwen3.6-27b");
+  const sent = JSON.parse(seenBody);
+  assert.equal(sent.model, "qwen/qwen3.6-27b");
+  assert.equal(sent.reasoning_effort, "none");
+  assert.equal(sent.reasoning_format, "hidden");
   assert.equal(seenBody.includes("test-only-secret-value"), false);
   assert.equal((await provider.healthCheck()).status, "ONLINE");
+});
+
+await test("Groq: raciocínio interno nunca chega ao transcript", async () => {
+  const fetcher = (async () => jsonResponse({
+    choices: [{
+      message: {
+        content: "<think>raciocínio privado que não pode ser persistido</think>\nResposta final limpa.",
+      },
+    }],
+  })) as typeof fetch;
+  const result = await new GroqProvider(config(), fetcher).chat([
+    { role: "user", content: "responda" },
+  ]);
+  assert.equal(result.content, "Resposta final limpa.");
+  assert.equal(result.content.includes("raciocínio privado"), false);
 });
 
 await test("Groq: protocolo completo de tool calling", async () => {

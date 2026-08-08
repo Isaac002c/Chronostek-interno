@@ -60,6 +60,14 @@ function parseArguments(raw: string | undefined): Record<string, unknown> {
   }
 }
 
+/** Nunca persistir/exibir blocos de raciocínio interno, mesmo se o provider os incluir. */
+function stripInternalReasoning(content: string | null | undefined): string {
+  return (content ?? "")
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<think>[\s\S]*$/gi, "")
+    .trim();
+}
+
 /** Provider OpenAI-compatible da Groq. Toda chamada ocorre exclusivamente no backend. */
 export class GroqProvider implements AIProvider {
   readonly name = "groq";
@@ -81,6 +89,12 @@ export class GroqProvider implements AIProvider {
       temperature: opts.temperature ?? this.cfg.temperature,
       stream: false,
     };
+    if (this.cfg.model === "qwen/qwen3.6-27b") {
+      // O Office precisa de respostas operacionais, não de raciocínio exposto.
+      // Além de reduzir consumo, isto impede chain-of-thought no transcript.
+      body.reasoning_effort = "none";
+      body.reasoning_format = "hidden";
+    }
     if (opts.tools?.length) {
       body.tools = opts.tools.map((tool) => ({
         type: "function",
@@ -166,7 +180,7 @@ export class GroqProvider implements AIProvider {
         const latencyMs = Date.now() - startedAt;
         this.lastHealth = this.health("ONLINE");
         return {
-          content: message.content?.trim() ?? "",
+          content: stripInternalReasoning(message.content),
           toolCalls,
           usage: data.usage
             ? {
