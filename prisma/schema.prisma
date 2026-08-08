@@ -814,6 +814,11 @@ model User {
   processReviews            ProcessReview[]            @relation("ProcessReviewedBy")
   correctiveActionsOwned    CorrectiveAction[]         @relation("CorrectiveActionOwner")
   correctiveActionsCreated  CorrectiveAction[]         @relation("CorrectiveActionCreatedBy")
+  agentTasksCreated         AgentTask[]                @relation("AgentTaskCreatedBy")
+  agentConversations        AgentConversation[]        @relation("AgentConversationUser")
+  agentActivityLogs         AgentActivityLog[]         @relation("AgentActivityUser")
+  agentApprovalsRequested   AgentApproval[]            @relation("AgentApprovalRequestedBy")
+  agentApprovalsDecided     AgentApproval[]            @relation("AgentApprovalDecidedBy")
 
   @@index([role])
   @@index([status])
@@ -2877,4 +2882,279 @@ model CorrectiveAction {
   @@index([status])
   @@index([processId])
   @@index([costCenterId])
+}
+
+// ═══════════════════════ TELUN OFFICE — funcionários digitais (IA) ═══════════════════════
+// Camada de agentes de IA dentro do HUB. A AUTORIDADE É SEMPRE DO BACKEND (nunca do prompt):
+// permissões de tool, nível de autonomia e aprovações são validadas pelo Agent Engine.
+// Tudo aditivo; multi-tenant leve (tenantId "default"). UI leve (sem 3D/engine/loop).
+
+enum AgentStatus {
+  OFFLINE
+  IDLE
+  WORKING
+  WAITING
+  WAITING_APPROVAL
+  ERROR
+}
+
+enum AgentTaskStatus {
+  PENDING
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+  WAITING_APPROVAL
+}
+
+enum AgentApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum AgentMessageRole {
+  USER
+  ASSISTANT
+  TOOL
+  SYSTEM
+}
+
+enum AgentMemoryScope {
+  SHORT_TERM
+  OPERATIONAL
+  PERSISTENT
+}
+
+enum AgentActivityType {
+  MESSAGE
+  TOOL_CALL
+  TOOL_RESULT
+  TOOL_ERROR
+  STATUS_CHANGE
+  TASK_CREATED
+  TASK_STARTED
+  TASK_COMPLETED
+  TASK_FAILED
+  APPROVAL_REQUESTED
+  APPROVAL_APPROVED
+  APPROVAL_REJECTED
+  DECISION
+  ERROR
+  NOTE
+}
+
+enum AgentToolAccess {
+  ALLOW
+  DENY
+}
+
+/// Funcionário digital (identidade, cargo, autonomia, prompt, modelo). Seeds em src/lib/agent-catalog.
+model Agent {
+  id              String      @id @default(cuid())
+  tenantId        String      @default("default")
+  slug            String
+  name            String
+  avatar          String? // emoji/inicial (UI leve)
+  role            String // cargo (ex.: "Analista Financeira IA")
+  department      String // Financeiro | Comercial | TI / Inovação | Executivo
+  description     String?
+  objective       String?
+  status          AgentStatus @default(OFFLINE)
+  currentActivity String? // frase curta do estado atual (dirigida por evento real)
+  autonomyLevel   Int         @default(1) // 0..4 — V1 inicia em 1
+  aiProvider      String      @default("ollama")
+  aiModel         String? // null = usa OLLAMA_MODEL da config central
+  systemPrompt    String // identidade + regras comportamentais (segurança real no backend)
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  tasks           AgentTask[]
+  conversations   AgentConversation[]
+  activityLogs    AgentActivityLog[]
+  approvals       AgentApproval[]
+  memories        AgentMemory[]
+  toolPermissions AgentToolPermission[]
+
+  @@unique([tenantId, slug])
+  @@index([department])
+  @@index([status])
+  @@index([isActive])
+}
+
+model AgentTask {
+  id          String          @id @default(cuid())
+  tenantId    String          @default("default")
+  agentId     String
+  title       String
+  description String?
+  status      AgentTaskStatus @default(PENDING)
+  priority    Priority        @default(MEDIA)
+  source      String          @default("user") // user | event | agent | system
+  createdById String?
+  entityType  String? // tipo do registro Telun relacionado (ex.: FinancialEntry)
+  entityId    String?
+  result      String?
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  agent        Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  createdBy    User?              @relation("AgentTaskCreatedBy", fields: [createdById], references: [id])
+  approvals    AgentApproval[]
+  activityLogs AgentActivityLog[]
+
+  @@index([tenantId])
+  @@index([agentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model AgentConversation {
+  id        String   @id @default(cuid())
+  tenantId  String   @default("default")
+  agentId   String
+  userId    String
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  agent        Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  user         User               @relation("AgentConversationUser", fields: [userId], references: [id])
+  messages     AgentMessage[]
+  activityLogs AgentActivityLog[]
+  approvals    AgentApproval[]
+
+  @@index([agentId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AgentMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  role           AgentMessageRole
+  content        String // sem raciocínio interno privado do modelo (§14)
+  toolName       String?
+  toolCallId     String?
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+
+  conversation AgentConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model AgentActivityLog {
+  id             String            @id @default(cuid())
+  tenantId       String            @default("default")
+  agentId        String
+  taskId         String?
+  conversationId String?
+  userId         String?
+  type           AgentActivityType
+  title          String
+  description    String?
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+
+  agent        Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  task         AgentTask?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  conversation AgentConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  user         User?              @relation("AgentActivityUser", fields: [userId], references: [id])
+
+  @@index([agentId])
+  @@index([taskId])
+  @@index([conversationId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model AgentApproval {
+  id             String              @id @default(cuid())
+  tenantId       String              @default("default")
+  agentId        String
+  taskId         String?
+  conversationId String?
+  requestedById  String? // usuário em cuja sessão o agente atuou
+  type           String
+  title          String
+  description    String?
+  proposedAction String
+  metadata       Json?
+  status         AgentApprovalStatus @default(PENDING)
+  decidedById    String?
+  decidedAt      DateTime?
+  requestedAt    DateTime            @default(now())
+
+  agent        Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  task         AgentTask?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  conversation AgentConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  requestedBy  User?              @relation("AgentApprovalRequestedBy", fields: [requestedById], references: [id])
+  decidedBy    User?              @relation("AgentApprovalDecidedBy", fields: [decidedById], references: [id])
+
+  @@index([agentId])
+  @@index([status])
+  @@index([taskId])
+  @@index([requestedAt])
+}
+
+model AgentMemory {
+  id         String           @id @default(cuid())
+  tenantId   String           @default("default")
+  agentId    String
+  scope      AgentMemoryScope @default(OPERATIONAL)
+  entityType String?
+  entityId   String?
+  content    String
+  importance Int              @default(1)
+  expiresAt  DateTime?
+  createdAt  DateTime         @default(now())
+
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
+  @@index([scope])
+  @@index([expiresAt])
+}
+
+/// Ferramenta controlada. A lógica de execução vive no código (registry); esta tabela
+/// guarda metadados + habilita permissões por agente. Seeds em src/lib/agent-catalog.
+model AgentTool {
+  id               String   @id @default(cuid())
+  tenantId         String   @default("default")
+  slug             String
+  name             String
+  description      String
+  category         String // financeiro | comercial | ti | executivo | shared
+  requiresApproval Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  permissions AgentToolPermission[]
+
+  @@unique([tenantId, slug])
+  @@index([category])
+}
+
+model AgentToolPermission {
+  id        String          @id @default(cuid())
+  agentId   String
+  toolId    String
+  access    AgentToolAccess @default(ALLOW)
+  createdAt DateTime        @default(now())
+
+  agent Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  tool  AgentTool @relation(fields: [toolId], references: [id], onDelete: Cascade)
+
+  @@unique([agentId, toolId])
+  @@index([agentId])
+  @@index([toolId])
 }

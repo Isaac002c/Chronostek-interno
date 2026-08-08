@@ -11,6 +11,7 @@ import {
   CalendarDays,
   CheckSquare,
   Settings,
+  Bot,
   type LucideIcon,
 } from "lucide-react";
 import { canAccessModule, type NavModule } from "./rbac";
@@ -63,6 +64,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: ListChecks,
     modules: ["DASHBOARD"],
     match: ["/dashboard/minha-operacao"],
+  },
+  {
+    key: "office",
+    label: "Telun Office",
+    href: "/dashboard/office",
+    icon: Bot,
+    modules: ["OFFICE"],
+    match: ["/dashboard/office"],
   },
   {
     key: "comercial",
@@ -148,6 +157,13 @@ export const NAV_ITEMS: NavItem[] = [
 
 /** Abas internas por módulo (subnavegação contextual). */
 export const MODULE_TABS: Record<string, NavTab[]> = {
+  office: [
+    { label: "Office", href: "/dashboard/office", module: "OFFICE" },
+    { label: "Agentes", href: "/dashboard/office/agentes", module: "OFFICE" },
+    { label: "Tarefas", href: "/dashboard/office/tarefas", module: "OFFICE" },
+    { label: "Aprovações", href: "/dashboard/office/aprovacoes", module: "OFFICE" },
+    { label: "Atividades", href: "/dashboard/office/atividades", module: "OFFICE" },
+  ],
   comercial: [
     { label: "Leads / CRM", href: "/dashboard/leads", module: "LEADS" },
     { label: "Clientes", href: "/dashboard/comercial/clientes", module: "COMERCIAL" },

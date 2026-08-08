@@ -13,6 +13,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:baseline": "prisma migrate resolve --applied 00000000000000_init",
     "db:seed": "prisma db seed",
+    "db:seed:office": "tsx prisma/seed-office.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset --force",
     "test": "tsx scripts/test-metas.ts",

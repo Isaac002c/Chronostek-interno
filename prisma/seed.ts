@@ -1,6 +1,7 @@
 import { PrismaClient, CostCenterType } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { PROCESS_CATALOG } from "../src/lib/process-catalog";
+import { seedOffice } from "../src/lib/office/seed";
 
 const prisma = new PrismaClient();
 
@@ -135,6 +136,11 @@ async function main() {
       },
     });
   }
+
+  // ───────────── Telun Office (agentes/ferramentas/permissões) ─────────────
+  // Estrutural: sempre semeado (idempotente), independente de dados de demo.
+  const office = await seedOffice(prisma);
+  console.log(`   Telun Office: ${office.agents} agentes, ${office.tools} ferramentas.`);
 
   if (process.env.SEED_DEMO_DATA !== "true") {
     console.log("✅ Seed de referência concluído (dados de demonstração desativados).");
