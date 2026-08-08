@@ -53,7 +53,7 @@ export async function claimNextJob(workerId: string, leaseSeconds = 90): Promise
       SELECT j."id"
       FROM "AgentJob" j
       JOIN "Agent" a ON a."id" = j."agentId"
-      WHERE j."status" IN (${Prisma.join(READY_STATES)})
+      WHERE j."status"::text IN (${Prisma.join(READY_STATES)})
         AND j."scheduledAt" <= NOW()
         AND (j."nextRetryAt" IS NULL OR j."nextRetryAt" <= NOW())
         AND (j."lockedUntil" IS NULL OR j."lockedUntil" < NOW())
