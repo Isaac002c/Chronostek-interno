@@ -134,11 +134,23 @@ async function runClara(job: AgentJob) {
 }
 
 async function runTheo(job: AgentJob) {
-  const [ai, integrations, jobs] = await Promise.all([
+  const [initialAI, integrations, jobs] = await Promise.all([
     getAIHealth(true),
     prisma.integrationConnection.findMany({ where: { tenantId: job.tenantId }, select: { provider: true, name: true, status: true, lastHealthAt: true, lastErrorCode: true } }),
     prisma.agentJob.groupBy({ by: ["status"], where: { tenantId: job.tenantId }, _count: { _all: true } }),
   ]);
+  let ai = initialAI;
+  if (ai.status === "DEGRADED" && process.env.AI_ENABLED !== "false" && process.env.AI_HEALTH_PROBE_ENABLED !== "false") {
+    try {
+      await getAIRouter().chat(
+        [{ role: "system", content: "Health check técnico. Responda somente OK." }, { role: "user", content: "OK" }],
+        { temperature: 0, capabilities: ["chat"], signal: AbortSignal.timeout(15_000) },
+      );
+      ai = await getAIHealth(true);
+    } catch {
+      ai = await getAIHealth(true);
+    }
+  }
   let restored = 0;
   for (const health of ai.providers ?? [{ provider: ai.provider, model: ai.model, status: ai.status, detail: ai.detail }]) {
     const key = { tenantId_provider_model: { tenantId: job.tenantId, provider: health.provider, model: health.model } };
