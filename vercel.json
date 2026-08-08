@@ -6,6 +6,10 @@
   "outputDirectory": "vercel-proxy",
   "rewrites": [
     {
+      "source": "/",
+      "destination": "https://api-interno.chronostek.com.br/"
+    },
+    {
       "source": "/:path*",
       "destination": "https://api-interno.chronostek.com.br/:path*"
     }
