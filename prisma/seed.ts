@@ -1,5 +1,6 @@
 import { PrismaClient, CostCenterType } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { PROCESS_CATALOG } from "../src/lib/process-catalog";
 
 const prisma = new PrismaClient();
 
@@ -468,6 +469,29 @@ async function main() {
   await prisma.approvalRequest.create({
     data: { type: "ORCAMENTO", requestedById: users.COMERCIAL, status: "PENDENTE", entityType: "Budget", entityId: "exemplo", amount: 10000, reason: "Aprovação de orçamento comercial (exemplo)" },
   });
+
+  // ───────────── Processos operacionais (12) — idempotente ─────────────
+  for (const p of PROCESS_CATALOG) {
+    const data = {
+      name: p.name,
+      costCenterId: costCenters[p.costCenterCode] ?? null,
+      objective: p.objective,
+      trigger: p.trigger,
+      steps: p.steps,
+      sla: p.sla,
+      kpiPrimaryName: p.kpiPrimaryName,
+      kpiPrimaryTarget: p.kpiPrimaryTarget,
+      kpiPrimaryUnit: p.kpiPrimaryUnit,
+      kpiSource: p.kpiSource,
+      order: p.order,
+    };
+    await prisma.processDefinition.upsert({
+      where: { tenantId_code: { tenantId: "default", code: p.code } },
+      update: data,
+      create: { tenantId: "default", code: p.code, status: "ATIVO", ...data },
+    });
+  }
+  console.log(`   ${PROCESS_CATALOG.length} processos operacionais semeados.`);
 
   console.log("✅ Seed concluído com sucesso.");
   console.log(`   Login: admin@${EMAIL_DOMAIN} (senha = SEED_ADMIN_PASSWORD)`);

@@ -32,6 +32,8 @@ export type LeadDefaults = {
   tags?: string;
   notes?: string | null;
   lossReason?: string | null;
+  nextAction?: string | null;
+  nextActionAt?: string;
 };
 
 export function LeadForm({
@@ -92,6 +94,17 @@ export function LeadForm({
             defaultValue={defaults.status ?? "NOVO"}
             options={LEAD_STATUS_OPTIONS}
           />
+        </Field>
+        <Field
+          label="Próxima ação"
+          htmlFor="nextAction"
+          hint="Lead ativo não deve ficar sem próxima ação definida."
+          error={fe.nextAction}
+        >
+          <Input id="nextAction" name="nextAction" defaultValue={defaults.nextAction ?? ""} placeholder="Ex.: ligar, enviar proposta…" />
+        </Field>
+        <Field label="Quando (próxima ação)" htmlFor="nextActionAt" error={fe.nextActionAt}>
+          <Input id="nextActionAt" name="nextActionAt" type="date" defaultValue={defaults.nextActionAt ?? ""} />
         </Field>
         <Field label="Valor estimado (R$)" htmlFor="estimatedValue" error={fe.estimatedValue}>
           <Input

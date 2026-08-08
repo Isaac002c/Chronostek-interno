@@ -1,11 +1,13 @@
 import {
   Home,
+  ListChecks,
   Briefcase,
   Wallet,
   FolderKanban,
   Megaphone,
   Scale,
   Target,
+  Workflow,
   CalendarDays,
   CheckSquare,
   Settings,
@@ -55,6 +57,14 @@ export const NAV_ITEMS: NavItem[] = [
     exact: true,
   },
   {
+    key: "minha-operacao",
+    label: "Minha Operação",
+    href: "/dashboard/minha-operacao",
+    icon: ListChecks,
+    modules: ["DASHBOARD"],
+    match: ["/dashboard/minha-operacao"],
+  },
+  {
     key: "comercial",
     label: "Comercial",
     href: "/dashboard/comercial/clientes",
@@ -101,6 +111,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Target,
     modules: ["METAS"],
     match: ["/dashboard/metas"],
+  },
+  {
+    key: "processos",
+    label: "Processos",
+    href: "/dashboard/processos",
+    icon: Workflow,
+    modules: ["PROCESSOS"],
+    match: ["/dashboard/processos"],
   },
   {
     key: "calendario",

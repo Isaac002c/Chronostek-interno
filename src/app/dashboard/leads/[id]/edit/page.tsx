@@ -74,6 +74,8 @@ export default async function EditLeadPage({
               tags: lead.tags.join(", "),
               notes: lead.notes,
               lossReason: lead.lossReason,
+              nextAction: lead.nextAction,
+              nextActionAt: toDateInputValue(lead.nextActionAt),
             }}
           />
         </CardContent>

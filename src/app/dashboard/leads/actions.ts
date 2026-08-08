@@ -37,6 +37,8 @@ const leadSchema = z.object({
   expectedCloseDate: z.date().nullable(),
   notes: z.string().nullable(),
   lossReason: z.string().nullable(),
+  nextAction: z.string().nullable(),
+  nextActionAt: z.date().nullable(),
   tags: z.array(z.string()),
 });
 
@@ -55,6 +57,8 @@ function parseLead(fd: FormData) {
     expectedCloseDate: optDate(fd, "expectedCloseDate"),
     notes: optStr(fd, "notes"),
     lossReason: optStr(fd, "lossReason"),
+    nextAction: optStr(fd, "nextAction"),
+    nextActionAt: optDate(fd, "nextActionAt"),
     tags: str(fd, "tags")
       .split(",")
       .map((t) => t.trim())

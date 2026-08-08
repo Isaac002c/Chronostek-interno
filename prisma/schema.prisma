@@ -810,6 +810,10 @@ model User {
   calendarConflictsResolved CalendarSyncConflict[]     @relation("CalendarConflictResolvedBy")
   calendarHistory           CalendarEventHistory[]
   calendarEventTypesCreated CalendarEventTypeConfig[]
+  processesOwned            ProcessDefinition[]        @relation("ProcessOwner")
+  processReviews            ProcessReview[]            @relation("ProcessReviewedBy")
+  correctiveActionsOwned    CorrectiveAction[]         @relation("CorrectiveActionOwner")
+  correctiveActionsCreated  CorrectiveAction[]         @relation("CorrectiveActionCreatedBy")
 
   @@index([role])
   @@index([status])
@@ -855,6 +859,8 @@ model CostCenter {
   dreMappings         DreRowMapping[]
   suppliersDefault    Supplier[]                @relation("SupplierDefaultCostCenter")
   calendarEvents      CalendarEvent[]
+  processes           ProcessDefinition[]
+  correctiveActions   CorrectiveAction[]
 
   @@index([active])
   @@index([type])
@@ -977,6 +983,8 @@ model Lead {
   responsibleId     String?
   costCenterId      String?
   status            LeadStatus @default(NOVO)
+  nextAction        String?
+  nextActionAt      DateTime?
   estimatedValue    Float?
   probability       Int?
   expectedCloseDate DateTime?
@@ -1059,6 +1067,8 @@ model Proposal {
   title        String
   value        Float          @default(0)
   status       ProposalStatus @default(RASCUNHO)
+  nextAction   String?
+  nextActionAt DateTime?
   probability  Int?
   expectedDate DateTime?
   notes        String?
@@ -1084,6 +1094,8 @@ model Contract {
   startDate               DateTime?
   endDate                 DateTime?
   status                  ContractStatus      @default(ATIVO)
+  nextAction              String?
+  nextActionAt            DateTime?
   costCenterId            String?
   categoryId              String?
   recurringEnabled        Boolean             @default(false)
@@ -1163,6 +1175,8 @@ model FinancialEntry {
   competenceMonth       Int // 1-12
   competenceYear        Int
   status                FinancialStatus @default(PENDENTE)
+  nextAction            String?
+  nextActionAt          DateTime?
   costCenterId          String?
   categoryId            String?
   clientId              String?
@@ -2728,4 +2742,139 @@ model OrganizationSettings {
   updatedAt   DateTime @updatedAt
 
   updatedBy User? @relation("OrgSettingsUpdatedBy", fields: [updatedById], references: [id])
+}
+
+// ─────────────────────────── GOVERNANÇA DE PROCESSOS ───────────────────────────
+// Camada de ACOMPANHAMENTO dos 12 processos operacionais. A EXECUÇÃO acontece
+// nos módulos (Comercial, Financeiro, TI, Marketing, Jurídico). Aqui ficam a
+// definição/metadados (§3), as revisões periódicas (§12) e as ações corretivas.
+
+enum ProcessStatus {
+  PLANEJADO
+  IMPLANTACAO
+  ATIVO
+  EM_REVISAO
+  INATIVO
+}
+
+enum ProcessReviewCadence {
+  SEMANAL
+  QUINZENAL
+  MENSAL
+  TRIMESTRAL
+}
+
+enum ProcessHealth {
+  OK
+  ATENCAO
+  CRITICO
+}
+
+enum CorrectiveActionStatus {
+  ABERTA
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+/**
+ * Definição/metadados de um processo operacional oficial da Telun (§3).
+ */
+model ProcessDefinition {
+  id               String               @id @default(cuid())
+  tenantId         String               @default("default")
+  code             String // F1, T2, OC3...
+  name             String
+  costCenterId     String?
+  ownerId          String?
+  secondaryOwners  String[]             @default([])
+  objective        String?
+  description      String?
+  trigger          String?
+  inputs           String?
+  steps            String[]             @default([])
+  output           String?
+  sla              String?
+  kpiPrimaryName   String?
+  kpiPrimaryTarget String?
+  kpiPrimaryUnit   String?
+  kpiSource        String? // chave usada pelo app p/ computar o KPI ao vivo (§13)
+  kpisSecondary    Json?
+  target           String?
+  reviewCadence    ProcessReviewCadence @default(SEMANAL)
+  status           ProcessStatus        @default(ATIVO)
+  version          Int                  @default(1)
+  startDate        DateTime?
+  lastReviewAt     DateTime?
+  nextReviewAt     DateTime?
+  documentationUrl String?
+  notes            String?
+  order            Int                  @default(0)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deletedAt        DateTime?
+
+  costCenter        CostCenter?        @relation(fields: [costCenterId], references: [id])
+  owner             User?              @relation("ProcessOwner", fields: [ownerId], references: [id])
+  reviews           ProcessReview[]
+  correctiveActions CorrectiveAction[]
+
+  @@unique([tenantId, code])
+  @@index([status])
+  @@index([costCenterId])
+}
+
+/**
+ * Revisão periódica de um processo (snapshot de KPIs + decisões) — §12.
+ */
+model ProcessReview {
+  id           String        @id @default(cuid())
+  tenantId     String        @default("default")
+  processId    String
+  reviewedById String?
+  reviewDate   DateTime      @default(now())
+  periodLabel  String? // ex.: "Semana 32/2026"
+  health       ProcessHealth @default(OK)
+  kpiSnapshot  Json?
+  highlights   String?
+  issues       String?
+  decisions    String?
+  createdAt    DateTime      @default(now())
+
+  process    ProcessDefinition @relation(fields: [processId], references: [id], onDelete: Cascade)
+  reviewedBy User?             @relation("ProcessReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([processId])
+  @@index([reviewDate])
+}
+
+/**
+ * Ação corretiva originada da revisão semanal (§12).
+ */
+model CorrectiveAction {
+  id           String                 @id @default(cuid())
+  tenantId     String                 @default("default")
+  title        String
+  problem      String?
+  costCenterId String?
+  processId    String?
+  ownerId      String?
+  createdById  String?
+  action       String?
+  priority     Priority               @default(MEDIA)
+  status       CorrectiveActionStatus @default(ABERTA)
+  dueDate      DateTime?
+  resolvedAt   DateTime?
+  result       String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  costCenter CostCenter?        @relation(fields: [costCenterId], references: [id])
+  process    ProcessDefinition? @relation(fields: [processId], references: [id])
+  owner      User?              @relation("CorrectiveActionOwner", fields: [ownerId], references: [id])
+  createdBy  User?              @relation("CorrectiveActionCreatedBy", fields: [createdById], references: [id])
+
+  @@index([status])
+  @@index([processId])
+  @@index([costCenterId])
 }
