@@ -230,6 +230,18 @@ await test("Engine não faz chamada extra ao atingir limite", () => {
   assert.match(source, /cfg\.maxToolCalls/);
 });
 
+await test("Primeira mensagem não envia conversationId nulo", () => {
+  const source = readFileSync(
+    resolve(process.cwd(), "src/app/dashboard/office/_components/agent-chat.tsx"),
+    "utf8",
+  );
+  assert.match(source, /\.\.\.\(conversationId \? \{ conversationId \} : \{\}\)/);
+  assert.equal(
+    source.includes("JSON.stringify({ agentSlug, conversationId, message: text })"),
+    false,
+  );
+});
+
 console.log(`\nOffice AI: ${passed} testes aprovados.`);
 }
 

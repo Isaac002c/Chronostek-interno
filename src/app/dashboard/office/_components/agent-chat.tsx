@@ -44,7 +44,11 @@ export function AgentChat({
       const res = await fetch("/api/office/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ agentSlug, conversationId, message: text }),
+        body: JSON.stringify({
+          agentSlug,
+          message: text,
+          ...(conversationId ? { conversationId } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (data?.conversationId) setConversationId(data.conversationId);
