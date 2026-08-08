@@ -2965,8 +2965,8 @@ model Agent {
   status          AgentStatus @default(OFFLINE)
   currentActivity String? // frase curta do estado atual (dirigida por evento real)
   autonomyLevel   Int         @default(1) // 0..4 — V1 inicia em 1
-  aiProvider      String      @default("ollama")
-  aiModel         String? // null = usa OLLAMA_MODEL da config central
+  aiProvider      String      @default("groq")
+  aiModel         String? // null = usa o modelo da configuração central do provider
   systemPrompt    String // identidade + regras comportamentais (segurança real no backend)
   isActive        Boolean     @default(true)
   createdAt       DateTime    @default(now())

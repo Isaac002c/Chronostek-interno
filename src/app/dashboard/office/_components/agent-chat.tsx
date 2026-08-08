@@ -80,7 +80,7 @@ export function AgentChat({
             <span className="mb-2 text-3xl">{agentAvatar}</span>
             <p className="font-medium text-foreground">Converse com {agentName}</p>
             <p className="mt-1 max-w-xs">
-              {agentName} consulta dados reais da Telun por ferramentas autorizadas e responde com a IA local.
+              {agentName} consulta dados reais da Telun por ferramentas autorizadas e responde com a IA da Telun.
             </p>
           </div>
         )}

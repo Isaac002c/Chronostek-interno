@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 type VercelConfig = {
@@ -36,11 +36,19 @@ assert.equal(
 );
 assert.match(
   config.buildCommand ?? "",
-  /^node -e .*mkdirSync\('vercel-proxy'.*writeFileSync\('vercel-proxy\/index\.html'/,
-  "O build da Vercel deve ser um comando sem dependências.",
+  /^node -e .*mkdirSync\('vercel-proxy'.*writeFileSync\('vercel-proxy\/healthz\.txt'/,
+  "O build da Vercel deve criar somente um marcador sem dependências.",
+);
+assert(
+  !config.buildCommand?.includes("index.html"),
+  "Um index.html estático sombrearia o rewrite da raiz.",
 );
 
 assert.deepEqual(config.rewrites, [
+  {
+    source: "/",
+    destination: "https://api-interno.chronostek.com.br/",
+  },
   {
     source: "/:path*",
     destination: "https://api-interno.chronostek.com.br/:path*",
@@ -96,21 +104,13 @@ assert(ignoreRules.includes("!vercel.json"));
 assert(ignoreRules.includes("!vercel-proxy/"));
 assert(ignoreRules.includes("!vercel-proxy/**"));
 
-const proxyFiles = readdirSync(join(root, "vercel-proxy"), {
-  recursive: true,
-  withFileTypes: true,
-})
-  .filter((entry) => entry.isFile())
-  .map((entry) => join(entry.parentPath, entry.name));
-assert.equal(proxyFiles.length, 1, "O artefato estático deve conter somente um arquivo.");
-assert(proxyFiles[0]?.endsWith(join("vercel-proxy", "index.html")));
-
 const serializedConfig = JSON.stringify(config);
 for (const forbidden of [
   "DATABASE_URL",
   "AUTH_SECRET",
   "POSTGRES_PASSWORD",
   "SEED_ADMIN_PASSWORD",
+  "GROQ_API_KEY",
 ]) {
   assert(
     !serializedConfig.includes(forbidden),

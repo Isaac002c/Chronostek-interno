@@ -86,6 +86,7 @@ const createInternalTask = defineTool({
   description:
     "Cria uma tarefa interna segura para você (o agente) acompanhar. Use para registrar um acompanhamento ou próximo passo operacional. Não executa ações críticas.",
   category: "shared",
+  mutation: true,
   requiresApproval: false,
   jsonSchema: {
     type: "object",
@@ -129,6 +130,7 @@ const requestApproval = defineTool({
   description:
     "Solicita aprovação humana para uma ação que você NÃO tem autonomia para executar (ex.: enviar cobrança externa, conceder desconto, alterar contrato). Descreve claramente a ação proposta. Não executa a ação — apenas registra o pedido para um humano decidir.",
   category: "shared",
+  mutation: true,
   requiresApproval: false,
   jsonSchema: {
     type: "object",

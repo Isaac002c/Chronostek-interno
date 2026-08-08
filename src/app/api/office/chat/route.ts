@@ -64,16 +64,21 @@ export async function POST(req: Request) {
     });
   } catch (err) {
     if (err instanceof AIError) {
+      const rateLimited = err.code === "RATE_LIMIT";
       return NextResponse.json(
         {
-          error: "A IA local está temporariamente indisponível. O restante do Telun Office continua funcionando.",
+          error: rateLimited
+            ? "A capacidade gratuita de IA está temporariamente indisponível. Tente novamente mais tarde."
+            : "A IA está temporariamente indisponível. O restante do Telun Office continua funcionando.",
           code: err.code,
           conversationId,
         },
-        { status: 503 },
+        { status: rateLimited ? 429 : err.code === "TIMEOUT" ? 504 : 503 },
       );
     }
-    console.error("[office/chat]", err);
+    console.error("[office/chat] unexpected error", {
+      type: err instanceof Error ? err.name : "UnknownError",
+    });
     return NextResponse.json(
       { error: "Não foi possível processar a mensagem agora.", conversationId },
       { status: 500 },

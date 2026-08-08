@@ -1,12 +1,27 @@
 #!/usr/bin/env bash
-# check-ai — verifica a saúde do runtime de IA do Telun Office (§32).
-# Uso: OLLAMA_BASE_URL=http://host:11434 OLLAMA_MODEL=qwen2.5:3b-instruct bash scripts/check-ai.sh
+# check-ai — verifica a configuração do provider sem consumir inferência.
 set -euo pipefail
+
+PROVIDER="${AI_PROVIDER:-groq}"
+
+if [[ "$PROVIDER" == "groq" ]]; then
+  MODEL="${GROQ_MODEL:-qwen/qwen3.6-27b}"
+  echo "== check-ai =="
+  echo "   Provider: Groq"
+  echo "   Modelo:   $MODEL"
+  if [[ -z "${GROQ_API_KEY:-}" ]]; then
+    echo "STATUS: OFFLINE — GROQ_API_KEY não configurada no backend."
+    exit 1
+  fi
+  echo "STATUS: DEGRADED — configuração presente; uma inferência real confirmará ONLINE."
+  exit 0
+fi
 
 BASE_URL="${OLLAMA_BASE_URL:-http://localhost:11434}"
 MODEL="${OLLAMA_MODEL:-qwen2.5:3b-instruct}"
 
 echo "== check-ai =="
+echo "   Provider: Ollama"
 echo "   Endpoint: $BASE_URL"
 echo "   Modelo:   $MODEL"
 

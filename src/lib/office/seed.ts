@@ -6,6 +6,8 @@ import { DEFAULT_TENANT } from "./agents";
 // upsert por chave única (tenantId+slug / agentId+toolId). Cria apenas
 // estrutura (agentes, ferramentas, permissões) — não insere dados fake (§53).
 export async function seedOffice(prisma: PrismaClient, tenantId = DEFAULT_TENANT) {
+  const configuredProvider =
+    (process.env.AI_PROVIDER ?? "groq").toLowerCase() === "ollama" ? "ollama" : "groq";
   const toolIdBySlug = new Map<string, string>();
   for (const t of TOOL_SEEDS) {
     const rec = await prisma.agentTool.upsert({
@@ -42,6 +44,7 @@ export async function seedOffice(prisma: PrismaClient, tenantId = DEFAULT_TENANT
         objective: a.objective,
         systemPrompt: a.systemPrompt,
         autonomyLevel: a.autonomyLevel,
+        aiProvider: configuredProvider,
         isActive: true,
       },
       create: {
@@ -56,7 +59,7 @@ export async function seedOffice(prisma: PrismaClient, tenantId = DEFAULT_TENANT
         systemPrompt: a.systemPrompt,
         autonomyLevel: a.autonomyLevel,
         status: "IDLE",
-        aiProvider: "ollama",
+        aiProvider: configuredProvider,
       },
       select: { id: true },
     });

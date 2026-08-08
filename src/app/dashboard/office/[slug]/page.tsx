@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { AgentWorkspace } from "../_components/agent-workspace";
+import { getAIConfig } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,9 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ sl
   ]);
 
   const status = agentStatusMeta(agent.status);
+  const ai = getAIConfig();
+  const providerLabel = ai.provider === "groq" ? "Groq" : "Ollama";
+  const modelLabel = ai.model === "qwen/qwen3.6-27b" ? "Qwen 3.6 27B" : ai.model;
 
   return (
     <div className="space-y-6">
@@ -71,7 +75,7 @@ export default async function AgentDetailPage({ params }: { params: Promise<{ sl
               <ShieldCheck className="size-3" /> {autonomyLabel(agent.autonomyLevel)}
             </Badge>
             <Badge tone="info" className="gap-1">
-              <Cpu className="size-3" /> {agent.aiModel ?? "IA local (modelo padrão)"}
+              <Cpu className="size-3" /> {providerLabel} · {agent.aiModel ?? modelLabel}
             </Badge>
             <Badge tone="neutral" className="gap-1">
               <Wrench className="size-3" /> {agent.toolCount} ferramentas

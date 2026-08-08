@@ -24,6 +24,8 @@
     "test:calendar:db": "tsx scripts/test-calendar-db.ts",
     "test:legal": "tsx scripts/test-legal-documents.ts",
     "test:legal:db": "tsx scripts/test-legal-db.ts",
+    "test:office": "tsx scripts/test-office-ai.ts",
+    "test:office:db": "tsx scripts/test-office-db.ts",
     "calendar:worker": "tsx scripts/calendar-sync-worker.ts",
     "test:integration": "tsx scripts/test-integration.ts",
     "test:deploy": "tsx scripts/test-deployment-contract.ts",

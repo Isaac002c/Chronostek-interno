@@ -25,6 +25,8 @@ export type ToolDefinition<A = any> = {
   name: string;
   description: string;
   category: ToolCategory;
+  /** Tool que altera estado interno. VIEWER nunca pode executá-la. */
+  mutation?: boolean;
   /** Se true, executar exige aprovação humana quando a autonomia não cobre (§8/§13). */
   requiresApproval: boolean;
   /** JSON Schema exposto ao modelo. */

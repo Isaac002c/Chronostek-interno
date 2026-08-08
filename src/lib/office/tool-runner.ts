@@ -1,8 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { getTool } from "./tools";
 import type { ToolContext } from "./tools/types";
+import type { ToolCategory } from "./tools/types";
 import { logActivity } from "./agents";
 import type { ToolCallRequest } from "@/lib/ai";
+import { canAccessModule, canWrite, type NavModule } from "@/lib/rbac";
+import type { Role } from "@prisma/client";
 
 // Runner de ferramentas — AUTORIDADE NO BACKEND (§9/§17). O modelo apenas
 // solicita; aqui validamos existência, permissão, argumentos, autonomia e
@@ -15,6 +18,23 @@ export type ToolExecution = {
   result?: unknown;
   error?: string;
 };
+
+const CATEGORY_MODULE: Record<ToolCategory, NavModule> = {
+  financeiro: "FINANCEIRO",
+  comercial: "COMERCIAL",
+  ti: "TI",
+  executivo: "OFFICE",
+  shared: "OFFICE",
+};
+
+/** Regra pura e testável: permissão do agente nunca substitui o RBAC humano. */
+export function canUserUseToolCategory(role: Role, category: ToolCategory): boolean {
+  return canAccessModule(role, CATEGORY_MODULE[category]);
+}
+
+export function canUserExecuteToolMutation(role: Role, mutation = false): boolean {
+  return !mutation || canWrite(role);
+}
 
 function activityRef(ctx: ToolContext) {
   return {
@@ -45,7 +65,37 @@ export async function executeToolCall(
     return { slug: tool.slug, label: tool.name, ok: false, error: "Sem permissão para usar esta ferramenta." };
   }
 
-  // 3) Validar argumentos — NUNCA confiar no modelo (§18).
+  // 3) O usuário humano possui acesso ao módulo da tool? Um prompt ou agente
+  //    comprometido não pode elevar a permissão da sessão.
+  if (!canUserUseToolCategory(ctx.user.role, tool.category)) {
+    await logActivity(activityRef(ctx), {
+      type: "TOOL_ERROR",
+      title: `RBAC do usuário bloqueou a ferramenta ${tool.name}`,
+      metadata: { tool: tool.slug, category: tool.category, reason: "USER_RBAC" },
+    });
+    return {
+      slug: tool.slug,
+      label: tool.name,
+      ok: false,
+      error: "Seu perfil não possui acesso ao módulo necessário para esta consulta.",
+    };
+  }
+
+  if (!canUserExecuteToolMutation(ctx.user.role, tool.mutation)) {
+    await logActivity(activityRef(ctx), {
+      type: "TOOL_ERROR",
+      title: `Perfil somente leitura bloqueou a ferramenta ${tool.name}`,
+      metadata: { tool: tool.slug, reason: "READ_ONLY_ROLE" },
+    });
+    return {
+      slug: tool.slug,
+      label: tool.name,
+      ok: false,
+      error: "Seu perfil possui acesso somente para leitura.",
+    };
+  }
+
+  // 4) Validar argumentos — NUNCA confiar no modelo (§18).
   const parsed = tool.schema.safeParse(call.arguments ?? {});
   if (!parsed.success) {
     const msg = parsed.error.issues.map((i) => `${i.path.join(".") || "arg"}: ${i.message}`).join("; ");
@@ -61,7 +111,7 @@ export async function executeToolCall(
     /* rótulo é cosmético */
   }
 
-  // 4) Autonomia + aprovação: tools sensíveis exigem autonomia >= 2; caso
+  // 5) Autonomia + aprovação: tools sensíveis exigem autonomia >= 2; caso
   //    contrário, registra uma aprovação pendente e NÃO executa (§8/§13/§17).
   if (tool.requiresApproval && ctx.agent.autonomyLevel < 2) {
     await prisma.agentApproval.create({

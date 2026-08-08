@@ -37,6 +37,14 @@ export class OllamaProvider implements AIProvider {
           role: m.role,
           content: m.content,
           ...(m.toolName ? { tool_name: m.toolName } : {}),
+          ...(m.toolCallId ? { tool_call_id: m.toolCallId } : {}),
+          ...(m.toolCalls?.length
+            ? {
+                tool_calls: m.toolCalls.map((call) => ({
+                  function: { name: call.name, arguments: call.arguments },
+                })),
+              }
+            : {}),
         })),
         stream: false,
         keep_alive: this.cfg.keepAlive,

@@ -1,20 +1,35 @@
 import { getAIConfig } from "./config";
+import { GroqProvider } from "./groq";
 import { OllamaProvider } from "./ollama";
 import type { AIProvider, AIHealth } from "./types";
 
 // Ponto único de escolha do provider (§31). Trocar de runtime = mudar aqui + env,
 // sem tocar no Agent Engine.
 let cachedProvider: AIProvider | null = null;
+let cachedProviderKey = "";
+
+function providerKey(): string {
+  const cfg = getAIConfig();
+  // Não reter nem expor o segredo na chave de cache; a presença basta no
+  // processo, pois rotação de secret reinicia o container em produção.
+  return [cfg.provider, cfg.model, cfg.groqBaseUrl, cfg.ollamaBaseUrl, Boolean(cfg.groqApiKey)].join("|");
+}
 
 export function getAIProvider(): AIProvider {
-  if (cachedProvider) return cachedProvider;
   const cfg = getAIConfig();
+  const key = providerKey();
+  if (cachedProvider && cachedProviderKey === key) return cachedProvider;
   switch (cfg.provider) {
+    case "groq":
+      cachedProvider = new GroqProvider(cfg);
+      break;
     case "ollama":
-    default:
       cachedProvider = new OllamaProvider(cfg);
-      return cachedProvider;
+      break;
   }
+  cachedProviderKey = key;
+  healthCache = null;
+  return cachedProvider;
 }
 
 // Health com cache curto — não fazer health check agressivo (§32).
@@ -41,4 +56,6 @@ export async function getAIHealth(force = false): Promise<AIHealth> {
 }
 
 export { getAIConfig } from "./config";
+export { GroqProvider } from "./groq";
+export { OllamaProvider } from "./ollama";
 export * from "./types";

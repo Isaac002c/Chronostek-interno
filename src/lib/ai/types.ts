@@ -1,5 +1,5 @@
-// Abstração de provider de IA (§31). Permite trocar Ollama por OpenAI/Anthropic/
-// Gemini no futuro sem reescrever o Agent Engine. Hoje só OllamaProvider existe.
+// Abstração de provider de IA. O Agent Engine depende apenas deste contrato;
+// trocar Groq/Ollama não altera agentes, tools ou regras de negócio.
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
 
@@ -9,6 +9,8 @@ export type ChatMessage = {
   /** Preenchido em mensagens role="tool": nome da ferramenta que produziu o conteúdo. */
   toolName?: string;
   toolCallId?: string;
+  /** Necessário para preservar o protocolo assistant -> tool_calls -> tool. */
+  toolCalls?: ToolCallRequest[];
 };
 
 /** Contrato de tool exposto ao modelo (JSON Schema, estilo OpenAI/Ollama). */
@@ -27,6 +29,12 @@ export type ToolCallRequest = {
 export type ChatResult = {
   content: string;
   toolCalls: ToolCallRequest[];
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+  };
+  latencyMs?: number;
   raw?: unknown;
 };
 
@@ -54,10 +62,19 @@ export interface AIProvider {
 
 /** Erro tipado da camada de IA — permite fallback claro no Agent Engine (§47/§48). */
 export class AIError extends Error {
-  code: "AI_ERROR" | "TIMEOUT" | "OFFLINE";
-  constructor(message: string, code: AIError["code"] = "AI_ERROR") {
+  code:
+    | "AI_ERROR"
+    | "TIMEOUT"
+    | "OFFLINE"
+    | "RATE_LIMIT"
+    | "PROVIDER_ERROR"
+    | "INVALID_RESPONSE";
+  status?: number;
+
+  constructor(message: string, code: AIError["code"] = "AI_ERROR", status?: number) {
     super(message);
     this.name = "AIError";
     this.code = code;
+    this.status = status;
   }
 }

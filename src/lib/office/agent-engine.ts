@@ -3,15 +3,17 @@ import type { Agent } from "@prisma/client";
 import type { SessionUser } from "@/lib/session";
 import { getAIProvider, getAIConfig, AIError, type ChatMessage } from "@/lib/ai";
 import { buildSystemPrompt, getAllowedToolSlugs, logActivity, setAgentStatus, DEFAULT_TENANT } from "./agents";
-import { getToolSpecs } from "./tools";
-import { executeToolCall } from "./tool-runner";
+import { getTool, getToolSpecs } from "./tools";
+import {
+  canUserExecuteToolMutation,
+  canUserUseToolCategory,
+  executeToolCall,
+} from "./tool-runner";
 import type { ToolContext } from "./tools/types";
+import { serializeToolResultForAI } from "./ai-data";
 
-const MAX_TOOL_ITERATIONS = 5;
-const HISTORY_LIMIT = 20;
-
-// ── Limitador de concorrência (§46). Serializa inferências pesadas conforme
-//    AI_MAX_CONCURRENCY para não sobrecarregar o runtime local. ──
+// ── Limitador de concorrência. Serializa inferências conforme
+//    AI_MAX_CONCURRENCY para preservar previsibilidade e quota. ──
 let active = 0;
 const waiters: Array<() => void> = [];
 async function withConcurrency<T>(limit: number, fn: () => Promise<T>): Promise<T> {
@@ -57,14 +59,26 @@ export async function runAgentTurn(params: {
 
   const ctx: ToolContext = { user, agent, tenantId, conversationId };
   const allowed = await getAllowedToolSlugs(agent.id);
-  const toolSpecs = getToolSpecs(allowed);
+  // Não exponha ao modelo tools que a sessão humana não pode usar. O runner
+  // repete a checagem no backend porque o modelo ainda pode inventar um slug.
+  const exposedAllowed = new Set(
+    [...allowed].filter((slug) => {
+      const tool = getTool(slug);
+      return Boolean(
+        tool &&
+          canUserUseToolCategory(user.role, tool.category) &&
+          canUserExecuteToolMutation(user.role, tool.mutation),
+      );
+    }),
+  );
+  const toolSpecs = getToolSpecs(exposedAllowed);
 
   // Histórico para contexto (só USER/ASSISTANT — evita replay de mensagens de
   // ferramenta fora do protocolo; contexto mínimo, §34).
   const historyDesc = await prisma.agentMessage.findMany({
     where: { conversationId, role: { in: ["USER", "ASSISTANT"] } },
     orderBy: { createdAt: "desc" },
-    take: HISTORY_LIMIT,
+    take: cfg.historyLimit,
     select: { role: true, content: true },
   });
   const history: ChatMessage[] = historyDesc
@@ -77,9 +91,18 @@ export async function runAgentTurn(params: {
   ];
 
   const toolsUsed: ToolUsage[] = [];
+  const startedAt = Date.now();
+  let aiRequests = 0;
+  let toolCallCount = 0;
+  let promptTokens = 0;
+  let completionTokens = 0;
+  let totalTokens = 0;
 
   try {
     return await withConcurrency(cfg.maxConcurrency, async () => {
+      if (!cfg.enabled) {
+        throw new AIError("A IA está desabilitada no backend.", "OFFLINE");
+      }
       await setAgentStatus(agent.id, "WORKING", "Analisando sua mensagem");
       await logActivity(
         { tenantId, agentId: agent.id, conversationId, userId: user.id },
@@ -87,28 +110,50 @@ export async function runAgentTurn(params: {
       );
 
       let finalText = "";
-      for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+      let limitReached = false;
+      for (let i = 0; i < cfg.maxToolRounds; i++) {
+        aiRequests++;
         const result = await provider.chat(messages, {
           tools: toolSpecs.length > 0 ? toolSpecs : undefined,
         });
+        promptTokens += result.usage?.promptTokens ?? 0;
+        completionTokens += result.usage?.completionTokens ?? 0;
+        totalTokens += result.usage?.totalTokens ?? 0;
 
         if (result.toolCalls.length === 0) {
+          if (!result.content) {
+            throw new AIError("O provider de IA retornou uma resposta vazia.", "INVALID_RESPONSE");
+          }
           finalText = result.content;
           break;
         }
 
         // O modelo pediu ferramentas: executar (validação/permissão no runner).
-        messages.push({ role: "assistant", content: result.content || "" });
+        messages.push({
+          role: "assistant",
+          content: result.content || "",
+          toolCalls: result.toolCalls,
+        });
         for (const call of result.toolCalls) {
+          if (toolCallCount >= cfg.maxToolCalls) {
+            limitReached = true;
+            break;
+          }
+          toolCallCount++;
           await setAgentStatus(agent.id, "WORKING", null).catch(() => {});
           const exec = await executeToolCall(call, ctx, allowed);
           toolsUsed.push({ label: exec.label, ok: exec.ok });
           await setAgentStatus(agent.id, "WORKING", exec.label).catch(() => {});
 
-          const payload = exec.ok
-            ? JSON.stringify(exec.result)
-            : `ERRO: ${exec.error}`;
-          messages.push({ role: "tool", toolName: call.name, content: payload });
+          const payload = serializeToolResultForAI(
+            exec.ok ? { ok: true, result: exec.result } : { ok: false, error: exec.error },
+          );
+          messages.push({
+            role: "tool",
+            toolName: call.name,
+            toolCallId: call.id,
+            content: payload,
+          });
 
           // Transcript da conversa: guarda o uso da ferramenta de forma amigável
           // (sem JSON bruto na UI — §15). O resultado cru fica só no modelo.
@@ -122,16 +167,30 @@ export async function runAgentTurn(params: {
             },
           });
         }
+        if (limitReached) break;
         // Loop novamente para o modelo usar os resultados.
       }
 
-      // Se estourou o limite sem resposta final, força uma resposta sem tools.
+      // Nunca faça uma chamada adicional ao atingir o limite: isso evita loops e
+      // consumo inesperado da quota gratuita.
       if (!finalText) {
-        const closing = await provider.chat(
-          [...messages, { role: "user", content: "Responda ao usuário com base no que já foi consultado, de forma objetiva." }],
-          {},
+        limitReached = true;
+        finalText =
+          "Interrompi esta análise porque ela atingiu o limite seguro de consultas. Tente fazer uma pergunta mais específica.";
+        await logActivity(
+          { tenantId, agentId: agent.id, conversationId, userId: user.id },
+          {
+            type: "ERROR",
+            title: "Limite seguro de ferramentas atingido",
+            metadata: {
+              provider: provider.name,
+              model: cfg.model,
+              status: "LIMIT_REACHED",
+              requests: aiRequests,
+              toolCalls: toolCallCount,
+            },
+          },
         );
-        finalText = closing.content || "Não consegui concluir a análise agora. Pode reformular ou tentar novamente?";
       }
 
       const assistantMsg = await prisma.agentMessage.create({
@@ -141,7 +200,21 @@ export async function runAgentTurn(params: {
       await prisma.agentConversation.update({ where: { id: conversationId }, data: { updatedAt: new Date() } });
       await logActivity(
         { tenantId, agentId: agent.id, conversationId, userId: user.id },
-        { type: "MESSAGE", title: "Respondeu ao usuário" },
+        {
+          type: "MESSAGE",
+          title: "Respondeu ao usuário",
+          metadata: {
+            provider: provider.name,
+            model: cfg.model,
+            status: limitReached ? "LIMIT_REACHED" : "SUCCESS",
+            latencyMs: Date.now() - startedAt,
+            requests: aiRequests,
+            toolCalls: toolCallCount,
+            promptTokens,
+            completionTokens,
+            totalTokens,
+          },
+        },
       );
       await setAgentStatus(agent.id, "IDLE", null);
 
@@ -153,14 +226,41 @@ export async function runAgentTurn(params: {
       await setAgentStatus(agent.id, "IDLE", null).catch(() => {});
       await logActivity(
         { tenantId, agentId: agent.id, conversationId, userId: user.id },
-        { type: "ERROR", title: "IA indisponível ao responder", description: err.message },
+        {
+          type: "ERROR",
+          title: err.code === "RATE_LIMIT" ? "Limite do provider de IA atingido" : "IA indisponível ao responder",
+          description: err.message,
+          metadata: {
+            provider: provider.name,
+            model: cfg.model,
+            status: "ERROR",
+            errorCode: err.code,
+            providerStatus: err.status ?? null,
+            latencyMs: Date.now() - startedAt,
+            requests: aiRequests,
+            toolCalls: toolCallCount,
+          },
+        },
       ).catch(() => {});
       throw err;
     }
     await setAgentStatus(agent.id, "ERROR", "Falha ao processar").catch(() => {});
     await logActivity(
       { tenantId, agentId: agent.id, conversationId, userId: user.id },
-      { type: "ERROR", title: "Erro ao processar a conversa", description: (err as Error).message },
+      {
+        type: "ERROR",
+        title: "Erro ao processar a conversa",
+        description: "Falha interna no Agent Engine.",
+        metadata: {
+          provider: provider.name,
+          model: cfg.model,
+          status: "ERROR",
+          errorType: err instanceof Error ? err.name : "UnknownError",
+          latencyMs: Date.now() - startedAt,
+          requests: aiRequests,
+          toolCalls: toolCallCount,
+        },
+      },
     ).catch(() => {});
     throw err;
   }
