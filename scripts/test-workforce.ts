@@ -5,6 +5,7 @@ import { safeHttpGet } from "../src/lib/network/safe-http";
 import { InfinitePayProvider } from "../src/lib/payment/infinitepay";
 import { isGlobalKillSwitchEnabled } from "../src/lib/workforce/worker";
 import { runSafeCommand } from "../src/lib/workforce/command-catalog";
+import { EvolutionProvider } from "../src/lib/communication/evolution";
 
 let passed = 0;
 async function test(name: string, fn: () => void | Promise<void>) { await fn(); passed += 1; console.log(`PASS ${name}`); }
@@ -47,6 +48,21 @@ async function main() {
   });
   await test("command runner rejeita comando fora do catálogo", async () => {
     await assert.rejects(() => runSafeCommand("rm -rf" as never), /COMMAND_NOT_ALLOWED/);
+  });
+  await test("Evolution expõe somente estado e QR validado", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      const path = String(input);
+      if (path.includes("connectionState")) return new Response(JSON.stringify({ instance: { state: "connecting" } }));
+      return new Response(JSON.stringify({ base64: "data:image/png;base64,aGVsbG8=" }));
+    };
+    try {
+      const provider = new EvolutionProvider({ baseUrl: "https://evolution.test", apiKey: "fixture-secret", instance: "fixture" });
+      assert.deepEqual(await provider.healthCheck(), { online: false, detail: "connecting" });
+      assert.equal(await provider.getPairingQRCode(), "data:image/png;base64,aGVsbG8=");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
   console.log(`\nWorkforce: ${passed} testes aprovados.`);
 }

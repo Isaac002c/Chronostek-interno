@@ -36,6 +36,13 @@ export class EvolutionProvider implements WhatsAppProvider {
       return { online: false, detail: (error as Error).message };
     }
   }
+
+  async getPairingQRCode(): Promise<string | null> {
+    const body = await this.request(`/instance/connect/${encodeURIComponent(this.config.instance)}`);
+    const value = typeof body.base64 === "string" ? body.base64 : null;
+    if (!value?.startsWith("data:image/png;base64,") || value.length > 2_000_000) return null;
+    return value;
+  }
 }
 
 export function getEvolutionProvider(): EvolutionProvider | null {
